@@ -7,6 +7,15 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "efficientnet-pytorch"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "torch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2e/a0/dd40b50aebf0028054b6b35062948da01123d7be38d08b6b1e5435df6363/efficientnet_pytorch-0.7.1.tar.gz", hash = "sha256:00b9b261effce59d2d47aae2ad238c29a2a65175470f41ada7ecac439b7c1ee1", size = 21012 }
+
+[[package]]
 name = "filelock"
 version = "3.16.1"
 source = { registry = "https://pypi.org/simple" }
@@ -340,6 +349,7 @@ name = "pytorch-cvc-training-eng"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "efficientnet-pytorch" },
     { name = "numpy" },
     { name = "opencv-python" },
     { name = "pillow" },
@@ -350,6 +360,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "efficientnet-pytorch", specifier = ">=0.7.1" },
     { name = "numpy", specifier = ">=2.2.1" },
     { name = "opencv-python", specifier = ">=4.10.0.84" },
     { name = "pillow", specifier = ">=11.1.0" },

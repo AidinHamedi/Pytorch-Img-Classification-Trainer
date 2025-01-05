@@ -189,7 +189,7 @@ def load_dataset(
 
     # Print a message indicating the backend being used
     print(
-        f"[bold green]Loading [white]data using [yellow]{backend} [white]backend from: [yellow]{directory}"
+        f"[bold green]Loading [reset]data using [yellow]{backend} [reset]backend from: [yellow]{directory}"
     )
 
     # Select the appropriate image loader based on the backend
