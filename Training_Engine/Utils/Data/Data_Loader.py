@@ -1,16 +1,20 @@
-# Copyright (c) 2025 Aidin Hamedi
-# 
-# This software is released under the MIT License.
-# https://opensource.org/licenses/MIT
-
 # Libs >>>
 import os
 import cv2
 import torch
 import numpy as np
-from tqdm import tqdm
 from PIL import Image
-from ..print_color import print_colored as cprint
+from rich import print
+from rich.progress import Progress
+from rich.progress import (
+    BarColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    TaskProgressColumn,
+    TimeElapsedColumn,
+    SpinnerColumn,
+    MofNCompleteColumn,
+)
 
 # Configuration and Constants >>>
 BACKEND_SUPPORT = {
@@ -20,7 +24,12 @@ BACKEND_SUPPORT = {
 
 
 # Core Functions >>>
-def load_image_opencv(img_path: str, img_size: tuple = None, color_mode: str = "rgb", raise_on_error: bool = False) -> np.ndarray:
+def load_image_opencv(
+    img_path: str,
+    img_size: tuple = None,
+    color_mode: str = "rgb",
+    raise_on_error: bool = False,
+) -> np.ndarray:
     """
     Load an image using OpenCV with multi-format support and optional resizing.
 
@@ -65,7 +74,12 @@ def load_image_opencv(img_path: str, img_size: tuple = None, color_mode: str = "
     return img
 
 
-def load_image_pil(img_path: str, img_size: tuple = None, color_mode: str = "rgb", raise_on_error: bool = False) -> np.ndarray:
+def load_image_pil(
+    img_path: str,
+    img_size: tuple = None,
+    color_mode: str = "rgb",
+    raise_on_error: bool = False,
+) -> np.ndarray:
     """
     Load an image using PIL with multi-format support and optional resizing.
 
@@ -173,16 +187,10 @@ def load_dataset(
     if backend not in {"opencv", "pil"}:
         raise ValueError(f"Unsupported backend: {backend}")
 
-    # Prepare the print signature for logging
-    print_sig = kwargs.get(
-        "print_sig",
-        cprint(
-            f"\\<Func.<Fore.LIGHTMAGENTA_EX>{load_dataset.__name__}<Style.RESET_ALL>\\> ",
-            end="",
-            return_string=True,
-        ),
+    # Print a message indicating the backend being used
+    print(
+        f"[bold green]Loading [white]data using [yellow]{backend} [white]backend from: [yellow]{directory}"
     )
-    cprint(f"{print_sig}Loading data using {backend} backend from: {directory}")
 
     # Select the appropriate image loader based on the backend
     loaders = {"opencv": load_image_opencv, "pil": load_image_pil}
@@ -195,11 +203,21 @@ def load_dataset(
     total_images = sum(len(files) for _, _, files in os.walk(directory))
 
     # Use tqdm to show a progress bar while loading images
-    with tqdm(
-        total=total_images,
-        desc=kwargs.get("progbar_desc", "Loading images"),
-        smoothing=0.2,
+    with Progress(
+        SpinnerColumn(finished_text="-"),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeRemainingColumn(),
+        TimeElapsedColumn(),
     ) as pbar:
+        # Initialize the progress bar
+        loading_task = pbar.add_task(
+            kwargs.get("progbar_desc", "[bold green]Loading images"),
+            total=total_images,
+        )
+
         # Iterate over each class folder
         for label_idx, label_name in enumerate(label_names):
             label_dir = os.path.join(directory, label_name)
@@ -224,7 +242,7 @@ def load_dataset(
                     raise ValueError(f"Failed to load image: {img_path}")
 
                 # Update the progress bar
-                pbar.update(1)
+                pbar.update(loading_task, advance=1)
 
     # Convert lists to NumPy arrays and return
     return np.array(x_data), np.array(y_data)
@@ -331,7 +349,9 @@ class Torch_ImgDataloader(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         """Return the processed image tensor and label for the given index."""
         label, img_path = self.data_pairs[idx]
-        img = self.load_func(img_path, color_mode=self.color_mode, raise_on_error=self.raise_on_error)
+        img = self.load_func(
+            img_path, color_mode=self.color_mode, raise_on_error=self.raise_on_error
+        )
         if img is None and self.raise_on_error:
             raise ValueError(f"Failed to load image: {img_path}")
         img_tensor = self._process_image(img)

@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# project-specific files
+/Database/Tools
+/Database/Validation
+/Database/Data
