@@ -206,7 +206,7 @@ def load_dataset(
     # Calculate the total number of images for the progress bar
     total_images = sum(len(files) for _, _, files in os.walk(directory))
 
-    # Use tqdm to show a progress bar while loading images
+    # Use rich to show a progress bar while loading images
     with Progress(
         SpinnerColumn(finished_text="-"),
         TextColumn("[progress.description]{task.description}"),
@@ -452,4 +452,5 @@ def make_data_pairs(
         },
         "class_weights": class_weights,
         "num_classes": num_classes,
+        "labels": labels,
     }

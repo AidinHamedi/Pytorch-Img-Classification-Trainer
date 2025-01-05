@@ -141,6 +141,7 @@ def main():
         DynamicArg(gen_train_dataloader),
         DynamicArg(mode="static", default_value=eval_dataloader),
         optimizer,
+        loss_fn,
     )
 
 

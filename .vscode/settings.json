@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
         "autoclass",
+        "corrcoef",
         "onehot"
     ],
     "python.testing.pytestEnabled": false,
