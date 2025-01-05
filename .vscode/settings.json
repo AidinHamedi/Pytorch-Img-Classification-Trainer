@@ -1,0 +1,14 @@
+{
+    "cSpell.words": [
+        "autoclass"
+    ],
+    "python.testing.pytestEnabled": false,
+    "python.testing.unittestEnabled": true,
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./Training_Engine",
+        "-p",
+        "*_test.py"
+    ]
+}

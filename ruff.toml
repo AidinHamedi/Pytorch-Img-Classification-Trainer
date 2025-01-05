@@ -1,0 +1,14 @@
+# Enables linting for .ipynb files
+extend-include = ["*.ipynb"]
+# Sets the target Python version to 3.10
+target-version = "py310"
+# Enables auto-fixing for all lintable issues 
+lint.fixable = ["ALL"]
+# Prints auto-fixes rather than just reporting issues
+show-fixes = true
+# Applies auto-fixes to code
+fix = true
+# Err Ignore
+lint.ignore = ["E402", "E731"]
+# exclude 
+exclude = ["backup", "Archive", "Exports", ".venv"]

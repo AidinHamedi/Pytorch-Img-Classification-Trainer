@@ -1,0 +1,2 @@
+All checks passed!
+warning: `--output-format=text` is deprecated. Use `--output-format=full` or `--output-format=concise` instead. `text` will be treated as `concise`.
