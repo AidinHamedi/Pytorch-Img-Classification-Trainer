@@ -9,6 +9,7 @@ dependencies = [
     "numpy>=2.2.1",
     "opencv-python>=4.10.0.84",
     "pillow>=11.1.0",
+    "pytorch-optimizer>=3.3.2",
     "rich>=13.9.4",
     "torch==2.5.1+cu124",
     "torchvision==0.20.1+cu124",

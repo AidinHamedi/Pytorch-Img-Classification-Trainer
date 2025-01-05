@@ -2,6 +2,7 @@
 import os
 import cv2
 import torch
+import random
 import numpy as np
 from PIL import Image
 from rich import print
@@ -15,6 +16,9 @@ from rich.progress import (
     SpinnerColumn,
     MofNCompleteColumn,
 )
+
+# Modules >>>
+from Training_Engine.Utils.Data.normalization import compute_class_weights_one_hot
 
 # Configuration and Constants >>>
 BACKEND_SUPPORT = {
@@ -356,3 +360,95 @@ class Torch_ImgDataloader(torch.utils.data.Dataset):
             raise ValueError(f"Failed to load image: {img_path}")
         img_tensor = self._process_image(img)
         return img_tensor, label
+
+
+def make_data_pairs(
+    train_dir: str,
+    val_dir: str = None,
+    auto_split: bool = True,
+    split_ratio: float = 0.2,
+    class_weighting_method: str = "linear"
+) -> dict:
+    # Start msg
+    print("[bold green]Making data pairs...")
+
+    # Create one-hot encodings for labels using PyTorch
+    label_dirs = os.listdir(train_dir)
+    labels = [lable.capitalize() for lable in label_dirs]
+    label_to_onehot = {
+        label.capitalize(): torch.eye(len(label_dirs))[i]
+        for i, label in enumerate(label_dirs)
+    }
+
+    # Create pairs of [one-hot label, image path]
+    data_pairs = []
+    for label_dir in label_dirs:
+        label_onehot = label_to_onehot[label_dir.capitalize()]
+        img_paths = os.listdir(os.path.join(train_dir, label_dir))
+        for img_path in img_paths:
+            full_path = os.path.join(train_dir, label_dir, img_path)
+            data_pairs.append([label_onehot, full_path])
+
+    # Shuffle the pairs
+    random.shuffle(data_pairs)
+
+    # Get dataset stats
+    num_classes = len(label_dirs)
+    image_count = len(data_pairs)
+
+    if auto_split:
+        split_idx = int(image_count * split_ratio)
+        train_pairs = data_pairs[:split_idx]
+        eval_pairs = data_pairs[split_idx:]
+        del data_pairs
+    else:
+        # Verify eval directory exists
+        if not os.path.exists(val_dir):
+            raise ValueError(f"Evaluation data directory not found: {val_dir}")
+
+        # Verify matching labels
+        eval_label_dirs = os.listdir(val_dir)
+        if set(eval_label_dirs) != set(label_dirs):
+            raise ValueError("Mismatch between training and evaluation labels")
+
+        # Create eval pairs using same label encoding
+        eval_pairs = []
+        for label_dir in eval_label_dirs:
+            label_onehot = label_to_onehot[label_dir.capitalize()]
+            img_paths = os.listdir(os.path.join(val_dir, label_dir))
+            for img_path in img_paths:
+                full_path = os.path.join(val_dir, label_dir, img_path)
+                eval_pairs.append([label_onehot, full_path])
+
+        train_pairs = data_pairs
+        del data_pairs
+
+    # Split statistics
+    eval_count = len(eval_pairs)
+    train_count = len(train_pairs)
+    total_count = eval_count + train_count
+    split_ratio = train_count / total_count
+
+    # Compute the class weights
+    class_weights = torch.from_numpy(
+    compute_class_weights_one_hot(
+        torch.stack([pair[0] for pair in train_pairs]).numpy(),
+        weighting=class_weighting_method,
+    ))
+    
+    # End
+    return {
+        "data_pairs": {
+            "train": train_pairs,
+            "eval": eval_pairs,
+        },
+        "stats": {
+            "main_dir_image_count": image_count,
+            "split_ratio": split_ratio,
+            "train_count": train_count,
+            "eval_count": eval_count,
+            "total_count": total_count,
+        }, 
+        "class_weights": class_weights,  
+        "num_classes": num_classes,
+    }

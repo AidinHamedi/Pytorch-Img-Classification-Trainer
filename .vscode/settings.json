@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
-        "autoclass"
+        "autoclass",
+        "onehot"
     ],
     "python.testing.pytestEnabled": false,
     "python.testing.unittestEnabled": true,

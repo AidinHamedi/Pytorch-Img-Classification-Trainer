@@ -25,6 +25,7 @@ def fit(
     },
     callbacks: list = [],
     verbose: bool = True,
+    force_cpu: bool = False,
 ):
     # Init rich
     console = Console()
@@ -33,7 +34,7 @@ def fit(
     console.print("[bold green]Initializing...")
 
     # Get device
-    device = get_device(verbose=verbose)
+    device = get_device(verbose=verbose, CPU_only=force_cpu)
     
     # Move model to device
     model = model.to(device, non_blocking=True)
