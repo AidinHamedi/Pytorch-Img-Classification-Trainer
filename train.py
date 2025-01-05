@@ -80,7 +80,7 @@ def main():
                 color_mode=img_format,
                 dtype=dtype,
                 transforms=rgb_augmentation_transform(
-                    img_res=img_res,
+                    img_size=img_res,
                     magnitude=max(min((env_args["epoch"]) / (100 / 6.2), 8.2), 0),
                 ),
             ),

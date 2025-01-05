@@ -1,4 +1,5 @@
 # Libs >>>
+import time
 import torch
 from torch import nn
 from rich.console import Console
@@ -6,7 +7,9 @@ from rich.console import Console
 # Modules >>>
 from .Utils.Base.dynamic_args import DynamicArg
 from .Utils.Base.device import get_device
+from .Utils.Base.other import filter_by_types
 from .Utils.Train.early_stopping import EarlyStopping
+from .Utils.Train.eval import calc_metrics, eval as eval_model
 
 # Conf >>>
 
@@ -28,6 +31,10 @@ def fit(
         "min_delta": 0.00001,
     },
     callbacks: list = [],
+    gradient_accumulation: bool = False,
+    gradient_accumulation_steps: int = 4,
+    mixed_precision: bool = True,
+    mixed_precision_dtype: torch.dtype = torch.bfloat16,
     verbose: bool = True,
     force_cpu: bool = False,
 ):
@@ -53,8 +60,14 @@ def fit(
         verbose=verbose,
     )
 
-    # Make the temp vars
-    Mettrics_hist = {}
+    # Train vars
+    Metrics_hist = {}
+
+    # Get eval dataloader
+    if test_dataloader.mode == "static":
+        test_dataloader_ins = test_dataloader.get_value()
+    if train_dataloader.mode == "static":
+        train_dataloader_ins = train_dataloader.get_value()
 
     # Make the train loop
     for epoch in range(1, max_epochs + 1):
@@ -63,4 +76,20 @@ def fit(
             f"\n[bold bright_white]Epoch [green]{epoch}[bold]/[cyan]{max_epochs} [yellow]-->"
         )
 
-        # Get the dataloaders
+        # Epoch prep
+        epoch_start_time = time.time()
+
+        # Get env vars
+        env_vars = filter_by_types(
+            locals(), (int, float, str, bool, bytes, list, tuple, dict, set)
+        )
+
+        # Get dataloaders
+        if test_dataloader.mode == "dynamic":
+            test_dataloader.set_env_args(env_vars)
+            test_dataloader_ins = test_dataloader.get_value()
+        if train_dataloader.mode == "dynamic":
+            train_dataloader.set_env_args(env_vars)
+            train_dataloader_ins = train_dataloader.get_value()
+
+        

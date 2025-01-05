@@ -1,6 +1,6 @@
 # Libs >>>
 import time
-import json
+import pickle
 import hashlib
 import logging
 from typing import Callable, Any, Dict, Optional
@@ -70,17 +70,46 @@ class DynamicArg:
 
     def _hash_env_args(self) -> str:
         """
-        Creates a hash of env_args for caching purposes.
-
-        Returns:
-            str: Hash string of the env_args.
-
-        Example:
-            env_args = {'a': 1, 'b': 2}
-            hash = self._hash_env_args()  # Generates a consistent hash
+        Hashes the environment arguments using SHA-256, including all serializable parts
+        and ignoring non-serializable ones.
         """
-        env_str = json.dumps(self.env_args, sort_keys=True)
-        return hashlib.sha256(env_str.encode()).hexdigest()
+
+        def recursive_hash(obj, hash_obj):
+            """
+            Recursively hashes parts of the object that can be serialized.
+            """
+            if isinstance(obj, (int, float, str, bool, bytes)):
+                # Basic types are always serializable
+                hash_obj.update(pickle.dumps(obj))
+            elif isinstance(obj, (list, tuple)):
+                # Recursively hash lists and tuples
+                for item in obj:
+                    recursive_hash(item, hash_obj)
+            elif isinstance(obj, dict):
+                # Recursively hash dictionaries
+                for key, value in sorted(obj.items()):
+                    recursive_hash(key, hash_obj)
+                    recursive_hash(value, hash_obj)
+            elif isinstance(obj, (set, frozenset)):
+                # Recursively hash sets
+                for item in sorted(obj):
+                    recursive_hash(item, hash_obj)
+            else:
+                try:
+                    # Attempt to hash the object
+                    hash_obj.update(pickle.dumps(obj))
+                except (pickle.PicklingError, AttributeError, TypeError):
+                    # Skip non-serializable objects
+                    pass
+
+        # Initialize a SHA-256 hash object
+        hash_obj = hashlib.sha256()
+
+        # Recursively hash the environment arguments
+        recursive_hash(self.env_args, hash_obj)
+
+        # Return the final hash as a hexadecimal string
+        return hash_obj.hexdigest()
 
     def update(self):
         """
