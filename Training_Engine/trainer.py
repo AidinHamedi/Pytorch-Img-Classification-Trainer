@@ -7,7 +7,6 @@ from rich.console import Console
 # Modules >>>
 from .Utils.Base.dynamic_args import DynamicArg
 from .Utils.Base.device import get_device
-from .Utils.Base.other import filter_by_types
 from .Utils.Train.early_stopping import EarlyStopping
 from .Utils.Train.eval import calc_metrics, eval as eval_model
 
@@ -80,9 +79,12 @@ def fit(
         epoch_start_time = time.time()
 
         # Get env vars
-        env_vars = filter_by_types(
-            locals(), (int, float, str, bool, bytes, list, tuple, dict, set)
-        )
+        env_vars = {
+            k: v
+            for k, v in locals().items()
+            if k != "env_vars"
+            and isinstance(v, (int, float, str, bool, bytes, list, tuple, dict, set))
+        }
 
         # Get dataloaders
         if test_dataloader.mode == "dynamic":
@@ -91,5 +93,3 @@ def fit(
         if train_dataloader.mode == "dynamic":
             train_dataloader.set_env_args(env_vars)
             train_dataloader_ins = train_dataloader.get_value()
-
-        
