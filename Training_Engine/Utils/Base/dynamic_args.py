@@ -6,7 +6,7 @@ import logging
 from typing import Callable, Any, Dict, Optional
 
 
-# Modules >>>
+# Main >>>
 class DynamicArg:
     def __init__(
         self,
@@ -39,6 +39,7 @@ class DynamicArg:
             value = da.get_value()  # Calls callable again due to update_interval
         ```
         """
+        # Initialize instance variables
         self.callable = callable
         self.default_value = default_value
         self.mode = mode.lower()

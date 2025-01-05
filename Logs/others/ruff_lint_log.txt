@@ -1,7 +1,14 @@
+Training_Engine\Utils\Data\data_loader.py:377:5: F841 Local variable `labels` is assigned to but never used
+Training_Engine\Utils\Train\early_stopping.py:42:5: E999 SyntaxError: Expected 'Indent', but got Dedent
+Training_Engine\trainer.py:51:9: E999 SyntaxError: Expected 'Indent', but got Dedent
+train.py:135:5: F841 Local variable `loss_fn` is assigned to but never used
 
-Fixed 1 error:
-- Training_Engine\trainer.py:
-    1 × F401 (unused-import)
+Fixed 3 errors:
+- train.py:
+    3 × F401 (unused-import)
 
-Found 1 error (1 fixed, 0 remaining).
+Found 7 errors (3 fixed, 4 remaining).
+No fixes available (2 hidden fixes can be enabled with the `--unsafe-fixes` option).
 warning: `--output-format=text` is deprecated. Use `--output-format=full` or `--output-format=concise` instead. `text` will be treated as `concise`.
+error: Failed to parse Training_Engine\trainer.py:51:9: Expected 'Indent', but got Dedent
+error: Failed to parse Training_Engine\Utils\Train\early_stopping.py:42:5: Expected 'Indent', but got Dedent

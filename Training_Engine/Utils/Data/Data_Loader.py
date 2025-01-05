@@ -367,7 +367,7 @@ def make_data_pairs(
     val_dir: str = None,
     auto_split: bool = True,
     split_ratio: float = 0.2,
-    class_weighting_method: str = "linear"
+    class_weighting_method: str = "linear",
 ) -> dict:
     # Start msg
     print("[bold green]Making data pairs...")
@@ -431,11 +431,12 @@ def make_data_pairs(
 
     # Compute the class weights
     class_weights = torch.from_numpy(
-    compute_class_weights_one_hot(
-        torch.stack([pair[0] for pair in train_pairs]).numpy(),
-        weighting=class_weighting_method,
-    ))
-    
+        compute_class_weights_one_hot(
+            torch.stack([pair[0] for pair in train_pairs]).numpy(),
+            weighting=class_weighting_method,
+        )
+    )
+
     # End
     return {
         "data_pairs": {
@@ -448,7 +449,7 @@ def make_data_pairs(
             "train_count": train_count,
             "eval_count": eval_count,
             "total_count": total_count,
-        }, 
-        "class_weights": class_weights,  
+        },
+        "class_weights": class_weights,
         "num_classes": num_classes,
     }

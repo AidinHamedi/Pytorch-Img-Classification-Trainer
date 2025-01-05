@@ -15,8 +15,10 @@ from .Utils.Base.device import get_device
 # Main >>>
 def fit(
     model: nn.Module,
-    Train_dataloader: DynamicArg,
-    Test_dataloader:  DynamicArg,
+    train_dataloader: DynamicArg,
+    test_dataloader:  DynamicArg,
+    optimizer: torch.optim.Optimizer,
+    loss_fn: torch.nn.Module,
     max_epochs: int = 512, 
     early_stopping: dict = {
         "patience": 24,
@@ -36,5 +38,14 @@ def fit(
     # Get device
     device = get_device(verbose=verbose, CPU_only=force_cpu)
     
-    # Move model to device
+    # Move to device
     model = model.to(device, non_blocking=True)
+    loss_fn = loss_fn.to(device, non_blocking=True)
+    
+    # Make the temp vars
+    total_steps = 0
+    
+    # Make the train loop
+    for epoch in range(max_epochs):
+        # Epoch msg
+        

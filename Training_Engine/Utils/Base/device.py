@@ -2,6 +2,7 @@
 import torch
 from rich import print
 
+
 # Main funcs >>>
 def get_device(CPU_only=False, verbose=False):
     """
@@ -29,7 +30,9 @@ def get_device(CPU_only=False, verbose=False):
             device_name = torch.cuda.get_device_name(device)
             device_capability = torch.cuda.get_device_capability(device)
             print(f"[bold green]CUDA [reset]│ Device Name: [bold white]{device_name}")
-            print(f"[bold green]CUDA [reset]│ Device Capability: [bold white]{device_capability}")
+            print(
+                f"[bold green]CUDA [reset]│ Device Capability: [bold white]{device_capability}"
+            )
         elif device.type == "xpu":
             device_name = torch.xpu.get_device_name(device)
             print(f"[bold cyan]XPU [reset]│ Device Name: [bold white]{device_name}")
