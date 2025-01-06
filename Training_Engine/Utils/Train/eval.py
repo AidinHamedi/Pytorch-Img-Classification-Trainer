@@ -59,9 +59,9 @@ def calc_metrics(y, y_pred, loss_fn, averaging="macro"):
         except Exception:
             return epsilon
 
-    # Convert tensors to numpy arrays
-    y = y.numpy()
-    y_pred = y_pred.numpy()
+    # Convert tensors to numpy arrays (first convert to fp32 to make it support a dtype like bfloat16)
+    y = y.type(torch.float32, non_blocking=True).numpy()
+    y_pred = y_pred.type(torch.float32, non_blocking=True).numpy()
 
     # Convert predictions to class labels
     y_pred_labels = y_pred.argmax(axis=1)
@@ -71,7 +71,7 @@ def calc_metrics(y, y_pred, loss_fn, averaging="macro"):
     metrics_dict = {
         "Loss": safe_metric_calculation(
             loss_reduction, loss_fn, torch.tensor(y_pred), torch.tensor(y)
-        ),
+        ).item(),
         f"F1 Score ({averaging})": safe_metric_calculation(
             f1_score, y_labels, y_pred_labels, average=averaging
         ),
@@ -81,14 +81,14 @@ def calc_metrics(y, y_pred, loss_fn, averaging="macro"):
         f"Recall ({averaging})": safe_metric_calculation(
             recall_score, y_labels, y_pred_labels, average=averaging
         ),
-        "AUROC": safe_metric_calculation(roc_auc_score, y, y_pred, multi_class="ovr"),
+        "AUROC": float(safe_metric_calculation(roc_auc_score, y, y_pred, multi_class="ovr")),
         "Accuracy": safe_metric_calculation(accuracy_score, y_labels, y_pred_labels),
-        "Cohen's Kappa": safe_metric_calculation(
+        "Cohen's Kappa": float(safe_metric_calculation(
             cohen_kappa_score, y_labels, y_pred_labels
-        ),
-        "Matthews Correlation Coefficient": safe_metric_calculation(
+        )),
+        "Matthews Correlation Coefficient": float(safe_metric_calculation(
             matthews_corrcoef, y_labels, y_pred_labels
-        ),
+        )),
     }
 
     return metrics_dict
@@ -129,50 +129,51 @@ def eval(
     all_y = []
     all_y_pred = []
 
+    # Initialize progress bar if not provided
+    if Progressbar is None:
+        Progressbar = Progress(
+            SpinnerColumn(finished_text="-"),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            MofNCompleteColumn(),
+            TimeRemainingColumn(),
+            TimeElapsedColumn(),
+            disable=not verbose,
+        )
+        Progressbar.start()
+        cleanup_progress = (
+            True  # Flag to indicate we need to stop the progress bar later
+        )
+    else:
+        cleanup_progress = False  # No cleanup needed if Progressbar was provided
+
+    # Add a task to the progress bar
+    task = Progressbar.add_task(
+        kwargs.get("progbar_desc", "Evaluation"), total=len(dataloader)
+    )
+
+    # Process the dataloader
     with torch.no_grad():
-        # Use provided Progressbar if not None, else create a new one
-        if Progressbar is None:
-            # Create a new Progress instance with the desired columns and disable if not verbose
-            pbar = Progress(
-                SpinnerColumn(finished_text="-"),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-                MofNCompleteColumn(),
-                TimeRemainingColumn(),
-                TimeElapsedColumn(),
-                disable=not verbose,
-            )
-            # Use the new Progress instance as a context manager
-            with pbar:
-                task = pbar.add_task(
-                    kwargs.get("progbar_desc", "Evaluation"), total=len(dataloader)
-                )
-                for x, y in dataloader:
-                    y_pred = model(x.to(device, non_blocking=True))
+        for x, y in dataloader:
+            y_pred = model(x.to(device, non_blocking=True))
+            all_y.append(y)
+            all_y_pred.append(y_pred.cpu())
+            Progressbar.update(task, advance=1)
 
-                    all_y.append(y)
-                    all_y_pred.append(y_pred.cpu())
+    # Clean up the progress bar if it was created here
+    Progressbar.stop_task(task)
+    if cleanup_progress:
+        Progressbar.stop()
 
-                    pbar.update(task, advance=1)
-        else:
-            # Use the provided Progressbar without creating a new context
-            task = Progressbar.add_task(
-                kwargs.get("progbar_desc", "Evaluation"), total=len(dataloader)
-            )
-            for x, y in dataloader:
-                y_pred = model(x.to(device, non_blocking=True))
-
-                all_y.append(y)
-                all_y_pred.append(y_pred.cpu())
-
-                Progressbar.update(task, advance=1)
-
+    # Concatenate results
     all_y = torch.cat(all_y)
     all_y_pred = torch.cat(all_y_pred)
 
+    # Calculate metrics
     metrics = calc_metrics(all_y, all_y_pred, loss_fn.cpu() if loss_fn else None)
 
+    # Return results
     if return_preds:
         return metrics, all_y_pred, all_y
     else:

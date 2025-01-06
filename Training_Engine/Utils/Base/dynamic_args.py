@@ -223,6 +223,7 @@ class DynamicArg:
         """
         return f"DynamicArg(value={self.value}, mode={self.mode}, last_updated={self.last_updated if self.mode == 'dynamic' else 'N/A'})"
 
+
 class DA_Manager:
     """
     A manager class for handling DynamicArg instances and their environment arguments.
@@ -275,7 +276,7 @@ class DA_Manager:
             raise ValueError("Input must be a DynamicArg instance.")
 
         # If the DynamicArg is in dynamic mode, set the environment arguments and update if necessary
-        if dynamic_arg.mode == 'dynamic':
+        if dynamic_arg.mode == "dynamic":
             dynamic_arg.set_env_args(self.env_args)
             if manual_update:
                 dynamic_arg.update()

@@ -1,7 +1,9 @@
 # Libs >>>
 import time
 import torch
+import inspect
 from torch import nn
+from functools import wraps
 from rich.console import Console
 from rich.progress import Progress
 from rich.progress import (
@@ -49,7 +51,19 @@ def console_prefix(console, prefix=" | "):
         console.print = original_print
 
 
+# Error handling >>>
+def error_handler(log_errors: bool = True, allow_keyboard_interrupt: bool = True):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception:
+                pass
+
+
 # Main >>>
+# @error_handler()
 def fit(
     model: nn.Module,
     train_dataloader: DynamicArg,
@@ -122,7 +136,7 @@ def fit(
                     v, (int, float, str, bool, bytes, list, tuple, dict, set)
                 )
             }
-            
+
             # Update dynamic args
             da_manager.update(env_vars)
 
@@ -131,7 +145,9 @@ def fit(
             train_dataloader_ins = da_manager.auto_get(train_dataloader)
 
             # Get dynamic args
-            gradient_accumulation_steps_ins = da_manager.auto_get(gradient_accumulation_steps)
+            gradient_accumulation_steps_ins = da_manager.auto_get(
+                gradient_accumulation_steps
+            )
 
             # Prep
             model.train()
@@ -143,6 +159,7 @@ def fit(
                 else train_dataloader_len
             )
             train_eval_data_len = round(train_total_batches * train_eval_portion)
+            train_loss_data = []
             train_eval_data = []
             batch_idx = 0
 
@@ -152,7 +169,7 @@ def fit(
             # Progress bar
             progress_bar = Progress(
                 TextColumn(epoch_verbose_prefix),
-                SpinnerColumn(finished_text="-"),
+                SpinnerColumn(finished_text="[yellow]⠿"),
                 TextColumn("[progress.description]{task.description}"),
                 BarColumn(),
                 TaskProgressColumn(),
@@ -171,10 +188,17 @@ def fit(
             # Train
             for fp_idx, (x, y) in enumerate(train_dataloader_ins):
                 # Forward pass + mixed precision
-                with autocast(device_type=device_str, enabled=mixed_precision):
+                with autocast(
+                    device_type=device_str,
+                    enabled=mixed_precision,
+                    dtype=mixed_precision_dtype,
+                ):
                     y_pred = model(x.to(device, non_blocking=True))
                     loss = loss_fn(y_pred, y.to(device, non_blocking=True))
 
+                # Store the loss
+                train_loss_data.append(loss.item())
+                
                 # Normalize the loss if using gradient accumulation
                 if gradient_accumulation:
                     loss = loss / gradient_accumulation_steps_ins
@@ -188,7 +212,6 @@ def fit(
                 # Model param update (Train step)
                 if not gradient_accumulation or (
                     (fp_idx + 1) % gradient_accumulation_steps_ins == 0
-                    or (fp_idx + 1) == train_dataloader_len
                 ):
                     # Update the batch_idx
                     batch_idx += 1
@@ -216,18 +239,20 @@ def fit(
                             {"y_pred": y_pred.detach().cpu(), "y": y.detach().cpu()}
                         )
 
-                        if batch_idx != train_total_batches:
-                            # Progress bar update
-                            progress_bar.update(
-                                training_task,
-                                advance=1,
-                                description="Training (Recording Eval Data)"
-                                if batch_idx != train_total_batches
-                                else None,
-                            )
+                        # Progress bar update
+                        progress_bar.update(
+                            training_task,
+                            advance=1,
+                            description="Training (Recording Eval Data)"
+                            if batch_idx != train_total_batches
+                            else "Training",
+                        )
                     else:
                         # Progress bar update
                         progress_bar.update(training_task, advance=1)
+
+            # Close task
+            progress_bar.stop_task(training_task)
 
             # Val
             train_eval = calc_metrics(
@@ -240,8 +265,10 @@ def fit(
                 model,
                 device,
                 loss_fn=loss_fn,
-                progress_bar=progress_bar,
+                Progressbar=progress_bar,
             )
 
             # Close progress bar
             progress_bar.stop()
+
+            console.print(test_eval)

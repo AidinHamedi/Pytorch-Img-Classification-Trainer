@@ -29,7 +29,7 @@ split_ratio = 0.8  # Split (Train&Test) ~ auto_split==True
 class_weighting_method = "linear"  # class weighting method
 
 # Train Conf >>>
-train_batchsize = 32
+train_batchsize = 16
 eval_batchsize = 32
 dataLoader_num_workers = 6
 
@@ -82,7 +82,7 @@ def main():
                 dtype=dtype,
                 transforms=rgb_augmentation_transform(
                     img_size=img_res,
-                    magnitude=max(min((env_args["epoch"]) / (100 / 6.2), 8.2), 0),
+                    magnitude=max(min((env_args["epoch"]) / (50 / 6.2), 8.2), 0),
                 ),
             ),
             batch_size=train_batchsize,
