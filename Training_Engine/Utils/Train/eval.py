@@ -101,6 +101,7 @@ def eval(
     loss_fn: Optional[Callable] = None,
     verbose: bool = True,
     return_preds: bool = False,
+    Progressbar: Progress = None,  
     **kwargs,
 ) -> Union[Dict[str, float], Tuple[Dict[str, float], torch.Tensor, torch.Tensor]]:
     """
@@ -113,6 +114,7 @@ def eval(
         device (torch.device): The device to run the evaluation on.
         verbose (bool, optional): Whether to show progress bar. Defaults to True.
         return_preds (bool, optional): Whether to return model predictions and original labels. Defaults to False.
+        Progressbar (Progress, optional): The progress bar object. Defaults to None.
         **kwargs: Additional keyword arguments.
             - progbar_desc (str): Custom description for the progress bar.
 
@@ -128,17 +130,34 @@ def eval(
     all_y_pred = []
 
     with torch.no_grad():
-        with Progress(
-            SpinnerColumn(finished_text="-"),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            MofNCompleteColumn(),
-            TimeRemainingColumn(),
-            TimeElapsedColumn(),
-            disable=not verbose,
-        ) as pbar:
-            task = pbar.add_task(
+        # Use provided Progressbar if not None, else create a new one
+        if Progressbar is None:
+            # Create a new Progress instance with the desired columns and disable if not verbose
+            pbar = Progress(
+                SpinnerColumn(finished_text="-"),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                MofNCompleteColumn(),
+                TimeRemainingColumn(),
+                TimeElapsedColumn(),
+                disable=not verbose,
+            )
+            # Use the new Progress instance as a context manager
+            with pbar:
+                task = pbar.add_task(
+                    kwargs.get("progbar_desc", "Evaluation"), total=len(dataloader)
+                )
+                for x, y in dataloader:
+                    y_pred = model(x.to(device, non_blocking=True))
+
+                    all_y.append(y)
+                    all_y_pred.append(y_pred.cpu())
+
+                    pbar.update(task, advance=1)
+        else:
+            # Use the provided Progressbar without creating a new context
+            task = Progressbar.add_task(
                 kwargs.get("progbar_desc", "Evaluation"), total=len(dataloader)
             )
             for x, y in dataloader:
@@ -147,7 +166,7 @@ def eval(
                 all_y.append(y)
                 all_y_pred.append(y_pred.cpu())
 
-                pbar.update(task, advance=1)
+                Progressbar.update(task, advance=1)
 
     all_y = torch.cat(all_y)
     all_y_pred = torch.cat(all_y_pred)

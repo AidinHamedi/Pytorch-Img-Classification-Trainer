@@ -56,3 +56,39 @@ def check_device(model_or_tensor):
         else model_or_tensor.device
     )
     return str(device).split(":")[0]
+
+def move_optimizer_to_device(optimizer, device):
+    """
+    Move the optimizer's state tensors to the specified device.
+
+    This function iterates through the optimizer's state dictionary and
+    moves all tensors to the given device. It is useful when you need to
+    change the device of the optimizer's state after initialization,
+    especially when working with mixed precision training or device changes.
+
+    Parameters:
+    optimizer (torch.optim.Optimizer): The optimizer instance to move.
+    device (torch.device or str): The target device (e.g., 'cuda' or 'cpu').
+
+    Returns:
+    None: The optimizer is modified in place.
+
+    Raises:
+    AttributeError: If the optimizer does not have a 'state_dict' method.
+    KeyError: If the optimizer's state_dict does not contain a 'state' key.
+    """
+    try:
+        optimizer_state = optimizer.state_dict()
+    except AttributeError:
+        raise AttributeError("Optimizer has no state_dict() method.")
+
+    if 'state' not in optimizer_state:
+        raise KeyError("Optimizer state_dict does not contain 'state' key.")
+
+    device = torch.device(device)  # Ensure device is a torch.device object
+
+    # Move state tensors to the specified device
+    for state in optimizer_state['state'].values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)

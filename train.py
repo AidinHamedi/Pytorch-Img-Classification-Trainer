@@ -9,6 +9,7 @@ from efficientnet_pytorch import EfficientNet
 from torchvision.transforms import v2 as v2_transforms
 
 # Modules >>>
+from Training_Engine.Utils.Base.device import get_device
 from Training_Engine.Utils.Data.data_loader import Torch_ImgDataloader, make_data_pairs
 from Training_Engine.Utils.Data.RgbRandAugment import rgb_augmentation_transform
 from Training_Engine.Utils.Base.dynamic_args import DynamicArg
@@ -102,8 +103,9 @@ def main():
         num_classes=data_pairs["num_classes"],
         dropout_rate=0.11,
         in_channels=3 if img_format == "rgb" else 1,
-    )
+    ).to(get_device()) # Have to move the model to device before making the optimizer (if using mixed precision not doing this will cause error)
 
+    
     # Make the optimizer
     optimizer_params = [
         {
