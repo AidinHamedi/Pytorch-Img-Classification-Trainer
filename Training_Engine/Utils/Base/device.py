@@ -57,6 +57,7 @@ def check_device(model_or_tensor):
     )
     return str(device).split(":")[0]
 
+
 def move_optimizer_to_device(optimizer, device):
     """
     Move the optimizer's state tensors to the specified device.
@@ -82,13 +83,13 @@ def move_optimizer_to_device(optimizer, device):
     except AttributeError:
         raise AttributeError("Optimizer has no state_dict() method.")
 
-    if 'state' not in optimizer_state:
+    if "state" not in optimizer_state:
         raise KeyError("Optimizer state_dict does not contain 'state' key.")
 
     device = torch.device(device)  # Ensure device is a torch.device object
 
     # Move state tensors to the specified device
-    for state in optimizer_state['state'].values():
+    for state in optimizer_state["state"].values():
         for k, v in state.items():
             if isinstance(v, torch.Tensor):
                 state[k] = v.to(device)

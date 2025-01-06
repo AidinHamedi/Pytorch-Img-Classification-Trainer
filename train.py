@@ -103,9 +103,10 @@ def main():
         num_classes=data_pairs["num_classes"],
         dropout_rate=0.11,
         in_channels=3 if img_format == "rgb" else 1,
-    ).to(get_device()) # Have to move the model to device before making the optimizer (if using mixed precision not doing this will cause error)
+    ).to(
+        get_device()
+    )  # Have to move the model to device before making the optimizer (if using mixed precision not doing this will cause error)
 
-    
     # Make the optimizer
     optimizer_params = [
         {

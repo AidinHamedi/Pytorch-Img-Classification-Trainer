@@ -1,3 +1,4 @@
+# You might ask why the F*** does this exist? Because I was having fun using the new deepseek 3 model 😁
 # Libs >>>
 import time
 import pickle
@@ -221,3 +222,82 @@ class DynamicArg:
             print(self)  # Outputs: DynamicArg(value=3, mode='dynamic', last_updated=1672543200.0)
         """
         return f"DynamicArg(value={self.value}, mode={self.mode}, last_updated={self.last_updated if self.mode == 'dynamic' else 'N/A'})"
+
+class DA_Manager:
+    """
+    A manager class for handling DynamicArg instances and their environment arguments.
+
+    This class is responsible for managing environment arguments (`env_args`) and providing
+    a method to retrieve values from DynamicArg instances. It ensures that DynamicArg instances
+    are updated with the correct environment arguments and allows for manual updates if needed.
+
+    Attributes:
+        env_args (dict): A dictionary of environment arguments that can be passed to DynamicArg instances.
+    """
+
+    def __init__(self):
+        """
+        Initializes the DA_Manager instance.
+
+        Sets up an empty dictionary to store environment arguments.
+        """
+        self.env_args = {}
+
+    def auto_get(self, dynamic_arg: DynamicArg, manual_update: bool = False) -> Any:
+        """
+        Retrieves the value from a DynamicArg instance, updating it if necessary.
+
+        This method ensures that the DynamicArg instance is updated with the current environment
+        arguments (`env_args`) and retrieves its value. If `manual_update` is True, it forces an
+        update of the DynamicArg instance before retrieving the value.
+
+        Args:
+            dynamic_arg (DynamicArg): The DynamicArg instance from which to retrieve the value.
+            manual_update (bool, optional): If True, forces an update of the DynamicArg instance
+                                            before retrieving the value. Defaults to False.
+
+        Returns:
+            Any: The current value of the DynamicArg instance.
+
+        Raises:
+            ValueError: If the input is not a DynamicArg instance.
+
+        Example:
+            ```
+            manager = DA_Manager()
+            dynamic_arg = DynamicArg(callable=lambda a, b: a + b, default_value=0, mode='dynamic')
+            manager.update({'a': 1, 'b': 2})
+            value = manager.auto_get(dynamic_arg)  # Retrieves the value, updating if necessary
+            ```
+        """
+        # Check if the input is a DynamicArg instance
+        if not isinstance(dynamic_arg, DynamicArg):
+            raise ValueError("Input must be a DynamicArg instance.")
+
+        # If the DynamicArg is in dynamic mode, set the environment arguments and update if necessary
+        if dynamic_arg.mode == 'dynamic':
+            dynamic_arg.set_env_args(self.env_args)
+            if manual_update:
+                dynamic_arg.update()
+            return dynamic_arg.get_value()
+        else:
+            # In static mode, return the default value
+            return dynamic_arg.default_value
+
+    def update(self, env_args: dict):
+        """
+        Updates the environment arguments managed by the DA_Manager.
+
+        This method sets the `env_args` attribute to the provided dictionary. It is used to
+        update the environment arguments that will be passed to DynamicArg instances.
+
+        Args:
+            env_args (dict): A dictionary of environment arguments to be used by DynamicArg instances.
+
+        Example:
+            ```
+            manager = DA_Manager()
+            manager.update({'a': 1, 'b': 2})  # Updates the environment arguments
+            ```
+        """
+        self.env_args = env_args

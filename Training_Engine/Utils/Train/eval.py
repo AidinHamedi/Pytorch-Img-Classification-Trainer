@@ -101,7 +101,7 @@ def eval(
     loss_fn: Optional[Callable] = None,
     verbose: bool = True,
     return_preds: bool = False,
-    Progressbar: Progress = None,  
+    Progressbar: Progress = None,
     **kwargs,
 ) -> Union[Dict[str, float], Tuple[Dict[str, float], torch.Tensor, torch.Tensor]]:
     """

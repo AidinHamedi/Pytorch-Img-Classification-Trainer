@@ -17,8 +17,8 @@ from contextlib import contextmanager
 from torch.amp import GradScaler, autocast
 
 # Modules >>>
-from .Utils.Base.dynamic_args import DynamicArg
 from .Utils.Base.device import get_device
+from .Utils.Base.dynamic_args import DynamicArg, DA_Manager
 from .Utils.Train.early_stopping import EarlyStopping
 from .Utils.Train.eval import calc_metrics, eval as eval_model
 
@@ -66,7 +66,9 @@ def fit(
     callbacks: list = [],
     train_eval_portion: float = 0.1,
     gradient_accumulation: bool = False,
-    gradient_accumulation_steps: int = 4,
+    gradient_accumulation_steps: DynamicArg = DynamicArg(
+        default_value=4, mode="static"
+    ),
     mixed_precision: bool = True,
     mixed_precision_dtype: torch.dtype = torch.bfloat16,
     force_cpu: bool = False,
@@ -97,11 +99,8 @@ def fit(
     mpt_scaler = GradScaler(device=device_str, enabled=mixed_precision)
     Metrics_hist = {}
 
-    # Get eval dataloader
-    if test_dataloader.mode == "static":
-        test_dataloader_ins = test_dataloader.get_value()
-    if train_dataloader.mode == "static":
-        train_dataloader_ins = train_dataloader.get_value()
+    # Dynamic args manager
+    da_manager = DA_Manager()
 
     # Make the train loop
     for epoch in range(1, max_epochs + 1):
@@ -123,21 +122,23 @@ def fit(
                     v, (int, float, str, bool, bytes, list, tuple, dict, set)
                 )
             }
+            
+            # Update dynamic args
+            da_manager.update(env_vars)
 
             # Get dataloaders
-            if test_dataloader.mode == "dynamic":
-                test_dataloader.set_env_args(env_vars)
-                test_dataloader_ins = test_dataloader.get_value()
-            if train_dataloader.mode == "dynamic":
-                train_dataloader.set_env_args(env_vars)
-                train_dataloader_ins = train_dataloader.get_value()
+            test_dataloader_ins = da_manager.auto_get(test_dataloader)
+            train_dataloader_ins = da_manager.auto_get(train_dataloader)
+
+            # Get dynamic args
+            gradient_accumulation_steps_ins = da_manager.auto_get(gradient_accumulation_steps)
 
             # Prep
             model.train()
             loss_fn = loss_fn.to(device, non_blocking=True)
             train_dataloader_len = train_dataloader_ins.__len__()
             train_total_batches = (
-                int(train_dataloader_len / gradient_accumulation_steps)
+                int(train_dataloader_len / gradient_accumulation_steps_ins)
                 if gradient_accumulation
                 else train_dataloader_len
             )
@@ -163,12 +164,12 @@ def fit(
                 "Training",
                 total=train_total_batches,
             )
-            
+
             # Show the progress bar
             progress_bar.start()
-            
+
             # Train
-            for idx, (x, y) in enumerate(train_dataloader_ins):
+            for fp_idx, (x, y) in enumerate(train_dataloader_ins):
                 # Forward pass + mixed precision
                 with autocast(device_type=device_str, enabled=mixed_precision):
                     y_pred = model(x.to(device, non_blocking=True))
@@ -176,7 +177,7 @@ def fit(
 
                 # Normalize the loss if using gradient accumulation
                 if gradient_accumulation:
-                    loss = loss / gradient_accumulation_steps
+                    loss = loss / gradient_accumulation_steps_ins
 
                 # Backward pass + mixed precision
                 if mixed_precision:
@@ -186,11 +187,12 @@ def fit(
 
                 # Model param update (Train step)
                 if not gradient_accumulation or (
-                    (idx + 1) % gradient_accumulation_steps == 0
+                    (fp_idx + 1) % gradient_accumulation_steps_ins == 0
+                    or (fp_idx + 1) == train_dataloader_len
                 ):
                     # Update the batch_idx
                     batch_idx += 1
-                    
+
                     # Gradient unscale
                     if mixed_precision and (
                         False  # TODO
@@ -210,13 +212,36 @@ def fit(
 
                     # Train Eval Data
                     if batch_idx >= (train_total_batches - train_eval_data_len):
-                        progress_bar.set_postfix_str("Recording Eval Data...")
                         train_eval_data.append(
                             {"y_pred": y_pred.detach().cpu(), "y": y.detach().cpu()}
                         )
-                        
-                    # Progress bar update
-                    progress_bar.update(training_task, advance=1)
-                    
+
+                        if batch_idx != train_total_batches:
+                            # Progress bar update
+                            progress_bar.update(
+                                training_task,
+                                advance=1,
+                                description="Training (Recording Eval Data)"
+                                if batch_idx != train_total_batches
+                                else None,
+                            )
+                    else:
+                        # Progress bar update
+                        progress_bar.update(training_task, advance=1)
+
+            # Val
+            train_eval = calc_metrics(
+                torch.cat([item["y"] for item in train_eval_data]),
+                torch.cat([item["y_pred"] for item in train_eval_data]),
+                loss_fn,
+            )
+            test_eval = eval_model(
+                test_dataloader_ins,
+                model,
+                device,
+                loss_fn=loss_fn,
+                progress_bar=progress_bar,
+            )
+
             # Close progress bar
             progress_bar.stop()
