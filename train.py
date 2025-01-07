@@ -29,7 +29,7 @@ split_ratio = 0.8  # Split (Train&Test) ~ auto_split==True
 class_weighting_method = "linear"  # class weighting method
 
 # Train Conf >>>
-train_batchsize = 128
+train_batchsize = 32
 eval_batchsize = 32
 dataLoader_num_workers = 8
 

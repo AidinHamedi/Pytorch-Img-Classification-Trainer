@@ -19,3 +19,6 @@ wheels/
 
 # Cache
 /cache/early_stopping
+
+# Tensorboard logs
+/Logs/runs

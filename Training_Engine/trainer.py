@@ -8,7 +8,12 @@ from rich import box
 from functools import wraps
 from rich.table import Table
 from rich.style import Style
-from rich.console import Console, RenderableType, ConsoleOptions, RenderResult
+from rich.console import (
+    Console,
+    RenderableType,
+    ConsoleOptions,
+    RenderResult,
+)
 from rich.segment import Segment
 from rich.progress import Progress
 from rich.progress import (
@@ -28,6 +33,10 @@ from torch.utils.tensorboard import SummaryWriter
 from .Utils.Base.other import format_seconds
 from .Utils.Base.device import get_device, check_device
 from .Utils.Base.dynamic_args import DynamicArg, DA_Manager
+from .Utils.Data.debug import (
+    make_grid,
+    retrieve_samples as dl_retrieve_samples,
+)
 from .Utils.Train.early_stopping import EarlyStopping
 from .Utils.Train.eval import calc_metrics, eval as eval_model
 
@@ -85,9 +94,11 @@ def error_handler(log_errors: bool = True, allow_keyboard_interrupt: bool = True
             except Exception:
                 pass
 
+
 # Clean up >>>
 def cleanup(local_vars: dict):
     pass
+
 
 # Main >>>
 # @error_handler()
@@ -106,13 +117,14 @@ def fit(
     },
     callbacks: list = [],
     train_eval_portion: float = 0.1,
-    gradient_accumulation: bool = False,
+    gradient_accumulation: bool = True,
     gradient_accumulation_steps: DynamicArg = DynamicArg(
         default_value=4, mode="static"
     ),
     mixed_precision: bool = True,
     mixed_precision_dtype: torch.dtype = torch.bfloat16,
     experiment_name: str = "!auto",
+    log_debugging: bool = True,
     force_cpu: bool = False,
 ):
     # Init rich
@@ -121,9 +133,11 @@ def fit(
     # Make experiment name
     if experiment_name == "!auto":
         experiment_name = f"{time.strftime('%Y-%m-%d_%H-%M-%S')}"
-    
+
     # Start msg
-    console.print(f"[bold green]Initializing... [default](Experiment name: [yellow]{experiment_name}[default])")
+    console.print(
+        f"[bold green]Initializing... [default](Experiment name: [yellow]{experiment_name}[default])"
+    )
 
     # Get device
     if not mixed_precision:
@@ -139,10 +153,13 @@ def fit(
     model = model.to(device, non_blocking=True)
 
     # Make the tensorboard writer
-    tbw_data = SummaryWriter(log_dir=f"./logs/runs/{experiment_name}/Data", max_queue=25)
-    tbw_val = SummaryWriter(log_dir=f"./logs/runs/{experiment_name}/Val", flush_secs=45)
-    tbw_train = SummaryWriter(log_dir=f"./logs/runs/{experiment_name}/Train", flush_secs=45)
-    
+    tb_log_dir = f"./logs/runs/{experiment_name}"
+    console.print(f"Tensorboard log dir: [green]{tb_log_dir}")
+    if log_debugging:
+        tbw_data = SummaryWriter(log_dir=f"{tb_log_dir}/Data", max_queue=25)
+    tbw_val = SummaryWriter(log_dir=f"{tb_log_dir}/Val", flush_secs=45)
+    tbw_train = SummaryWriter(log_dir=f"{tb_log_dir}/Train", flush_secs=45)
+
     # Make the early stopping
     early_stopping = EarlyStopping(
         monitor_name=early_stopping_cnf["monitor"],
@@ -192,6 +209,29 @@ def fit(
                 gradient_accumulation_steps
             )
 
+            # Log debug images
+            if log_debugging:
+                tbw_data.add_image(
+                    "Train-Dataloader",
+                    make_grid(
+                        torch.stack(
+                            dl_retrieve_samples(
+                                train_dataloader_ins,
+                                num_samples=9,
+                                selection_method="random",
+                                seed=42,
+                            )
+                        ),
+                        nrow=3,
+                        padding=2,
+                        normalize=True,
+                        value_range=(0, 1),
+                        pad_value=0,
+                        format="CHW",
+                    ),
+                    epoch,
+                )
+
             # Prep
             model.train()
             loss_fn = loss_fn.to(device, non_blocking=True)
@@ -208,6 +248,7 @@ def fit(
 
             # Verbose
             console.print(f"Train eval data len: [cyan]{train_eval_data_len}")
+            console.print(f"Learning rate: [cyan]{optimizer.param_groups[0]['lr']}")
 
             # Progress bar
             progress_bar = Progress(
@@ -340,16 +381,20 @@ def fit(
             console.print(eval_table)
 
             # Tensorboard logging
-            
+            for metric in train_eval:
+                tbw_train.add_scalar(f"Metrics/{metric}", train_eval[metric], epoch)
+                tbw_val.add_scalar(f"Metrics/{metric}", test_eval[metric], epoch)
 
             # Show time elapsed
-            console.print(f"Epoch time: {format_seconds(time.time() - epoch_start_time)}s")
-            
+            console.print(
+                f"Epoch time: [cyan]{format_seconds(time.time() - epoch_start_time)}s"
+            )
+
             # Early stopping
-            early_stopping.update(epoch, test_eval[early_stopping_cnf["monitor"]], model)
+            early_stopping.update(
+                epoch, test_eval[early_stopping_cnf["monitor"]], model
+            )
             if early_stopping.should_stop:
                 console.print("Stopping the training early...")
                 # End
                 break
-            
-            
