@@ -13,4 +13,9 @@ wheels/
 /Database/Tools
 /Database/Validation
 /Database/Data
+
+# VSCode-specific files
 /.VSCodeCounter
+
+# Cache
+/cache/early_stopping

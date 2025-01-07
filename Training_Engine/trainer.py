@@ -1,10 +1,15 @@
 # Libs >>>
+import gc
 import time
 import torch
-import inspect
+import inspect  # noqa: F401
 from torch import nn
+from rich import box
 from functools import wraps
-from rich.console import Console
+from rich.table import Table
+from rich.style import Style
+from rich.console import Console, RenderableType, ConsoleOptions, RenderResult
+from rich.segment import Segment
 from rich.progress import Progress
 from rich.progress import (
     BarColumn,
@@ -17,9 +22,11 @@ from rich.progress import (
 )
 from contextlib import contextmanager
 from torch.amp import GradScaler, autocast
+from torch.utils.tensorboard import SummaryWriter
 
 # Modules >>>
-from .Utils.Base.device import get_device
+from .Utils.Base.other import format_seconds
+from .Utils.Base.device import get_device, check_device
 from .Utils.Base.dynamic_args import DynamicArg, DA_Manager
 from .Utils.Train.early_stopping import EarlyStopping
 from .Utils.Train.eval import calc_metrics, eval as eval_model
@@ -29,25 +36,42 @@ epoch_verbose_prefix = " | "
 
 
 # Prep >>>
+class PrefixedRenderable:
+    def __init__(
+        self, renderable: RenderableType, prefix: str, prefix_style: Style = None
+    ):
+        self.renderable = renderable
+        self.prefix = prefix
+        self.prefix_style = prefix_style or Style()
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        segments = console.render(self.renderable, options)
+        prefix_segments = console.render_str(self.prefix, style=self.prefix_style)
+        for line in Segment.split_lines(segments):
+            yield from prefix_segments
+            yield from line
+            yield Segment("\n")
+
+
 @contextmanager
-def console_prefix(console, prefix=" | "):
-    # Save the original print method
+def console_prefix(console, prefix=" | ", prefix_style: Style = None):
     original_print = console.print
 
-    # Define a new print method with the prefix
     def custom_print(*args, **kwargs):
-        # Add the prefix to the output
-        prefixed_args = [
-            f"{prefix}{arg}" if isinstance(arg, str) else arg for arg in args
-        ]
-        original_print(*prefixed_args, **kwargs)
+        new_args = []
+        for arg in args:
+            if isinstance(arg, RenderableType):
+                new_args.append(PrefixedRenderable(arg, prefix, prefix_style))
+            else:
+                new_args.append(arg)
+        original_print(*new_args, **kwargs)
 
-    # Temporarily override the console.print method
     console.print = custom_print
     try:
         yield
     finally:
-        # Restore the original print method
         console.print = original_print
 
 
@@ -61,6 +85,9 @@ def error_handler(log_errors: bool = True, allow_keyboard_interrupt: bool = True
             except Exception:
                 pass
 
+# Clean up >>>
+def cleanup(local_vars: dict):
+    pass
 
 # Main >>>
 # @error_handler()
@@ -71,7 +98,7 @@ def fit(
     optimizer: torch.optim.Optimizer,
     loss_fn: torch.nn.Module,
     max_epochs: int = 512,
-    early_stopping: dict = {
+    early_stopping_cnf: dict = {
         "patience": 24,
         "monitor": "Cohen's Kappa",
         "mode": "max",
@@ -85,33 +112,49 @@ def fit(
     ),
     mixed_precision: bool = True,
     mixed_precision_dtype: torch.dtype = torch.bfloat16,
+    experiment_name: str = "!auto",
     force_cpu: bool = False,
 ):
     # Init rich
     console = Console()
 
+    # Make experiment name
+    if experiment_name == "!auto":
+        experiment_name = f"{time.strftime('%Y-%m-%d_%H-%M-%S')}"
+    
     # Start msg
-    console.print("[bold green]Initializing...")
+    console.print(f"[bold green]Initializing... [default](Experiment name: [yellow]{experiment_name}[default])")
 
     # Get device
-    device = get_device(verbose=True, CPU_only=force_cpu)
+    if not mixed_precision:
+        device = get_device(verbose=True, CPU_only=force_cpu)
+    else:
+        device = check_device(model)
+        console.print(
+            f"Chosen device: [bold green]{device}[default], [yellow](using the device that model is currently on)"
+        )
     device_str = str(device)
 
     # Move to device
     model = model.to(device, non_blocking=True)
 
+    # Make the tensorboard writer
+    tbw_data = SummaryWriter(log_dir=f"./logs/runs/{experiment_name}/Data", max_queue=25)
+    tbw_val = SummaryWriter(log_dir=f"./logs/runs/{experiment_name}/Val", flush_secs=45)
+    tbw_train = SummaryWriter(log_dir=f"./logs/runs/{experiment_name}/Train", flush_secs=45)
+    
     # Make the early stopping
     early_stopping = EarlyStopping(
-        monitor_name=early_stopping["monitor"],
-        mode=early_stopping["mode"],
-        patience=early_stopping["patience"],
-        min_delta=early_stopping["min_delta"],
+        monitor_name=early_stopping_cnf["monitor"],
+        mode=early_stopping_cnf["mode"],
+        patience=early_stopping_cnf["patience"],
+        min_delta=early_stopping_cnf["min_delta"],
         verbose=True,
     )
 
     # Train vars
     mpt_scaler = GradScaler(device=device_str, enabled=mixed_precision)
-    Metrics_hist = {}
+    metrics_hist = {"Train": [], "Val": []}
 
     # Dynamic args manager
     da_manager = DA_Manager()
@@ -198,7 +241,7 @@ def fit(
 
                 # Store the loss
                 train_loss_data.append(loss.item())
-                
+
                 # Normalize the loss if using gradient accumulation
                 if gradient_accumulation:
                     loss = loss / gradient_accumulation_steps_ins
@@ -271,4 +314,42 @@ def fit(
             # Close progress bar
             progress_bar.stop()
 
-            console.print(test_eval)
+            # Clean up
+            torch.cuda.empty_cache()
+            gc.collect()
+
+            # Saving the results
+            metrics_hist["Train"].append(train_eval)
+            metrics_hist["Val"].append(test_eval)
+
+            # Make the results table
+            eval_table = Table(box=box.ROUNDED, highlight=True)
+            eval_table.add_column("Set", justify="center", style="bold green")
+            for metric in test_eval:
+                eval_table.add_column(metric, justify="center")
+            for metric_set in [[train_eval, "Train"], [test_eval, "Val"]]:
+                eval_table.add_row(
+                    metric_set[1],
+                    *[
+                        f"{metric_set[0][metric]:.5f}"
+                        if isinstance(metric_set[0][metric], float)
+                        else metric_set[0][metric]
+                        for metric in test_eval
+                    ],
+                )
+            console.print(eval_table)
+
+            # Tensorboard logging
+            
+
+            # Show time elapsed
+            console.print(f"Epoch time: {format_seconds(time.time() - epoch_start_time)}s")
+            
+            # Early stopping
+            early_stopping.update(epoch, test_eval[early_stopping_cnf["monitor"]], model)
+            if early_stopping.should_stop:
+                console.print("Stopping the training early...")
+                # End
+                break
+            
+            

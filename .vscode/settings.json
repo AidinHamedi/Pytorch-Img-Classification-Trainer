@@ -2,7 +2,8 @@
     "cSpell.words": [
         "autoclass",
         "corrcoef",
-        "onehot"
+        "onehot",
+        "renderable"
     ],
     "python.testing.pytestEnabled": false,
     "python.testing.unittestEnabled": true,

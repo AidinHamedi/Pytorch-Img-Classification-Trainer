@@ -29,9 +29,9 @@ split_ratio = 0.8  # Split (Train&Test) ~ auto_split==True
 class_weighting_method = "linear"  # class weighting method
 
 # Train Conf >>>
-train_batchsize = 16
+train_batchsize = 128
 eval_batchsize = 32
-dataLoader_num_workers = 6
+dataLoader_num_workers = 8
 
 # Prep >>>
 pretty.install()
@@ -98,7 +98,7 @@ def main():
     # Make the model
     print("[bold green]Making the model...")
     model = EfficientNet.from_name(
-        "efficientnet-b1",
+        "efficientnet-b0",
         include_top=True,
         num_classes=data_pairs["num_classes"],
         dropout_rate=0.11,

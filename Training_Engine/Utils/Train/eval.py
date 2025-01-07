@@ -81,14 +81,16 @@ def calc_metrics(y, y_pred, loss_fn, averaging="macro"):
         f"Recall ({averaging})": safe_metric_calculation(
             recall_score, y_labels, y_pred_labels, average=averaging
         ),
-        "AUROC": float(safe_metric_calculation(roc_auc_score, y, y_pred, multi_class="ovr")),
+        "AUROC": float(
+            safe_metric_calculation(roc_auc_score, y, y_pred, multi_class="ovr")
+        ),
         "Accuracy": safe_metric_calculation(accuracy_score, y_labels, y_pred_labels),
-        "Cohen's Kappa": float(safe_metric_calculation(
-            cohen_kappa_score, y_labels, y_pred_labels
-        )),
-        "Matthews Correlation Coefficient": float(safe_metric_calculation(
-            matthews_corrcoef, y_labels, y_pred_labels
-        )),
+        "Cohen's Kappa": float(
+            safe_metric_calculation(cohen_kappa_score, y_labels, y_pred_labels)
+        ),
+        "Matthews Correlation Coefficient": float(
+            safe_metric_calculation(matthews_corrcoef, y_labels, y_pred_labels)
+        ),
     }
 
     return metrics_dict

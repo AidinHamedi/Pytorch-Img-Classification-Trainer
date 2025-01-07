@@ -12,6 +12,7 @@ dependencies = [
     "pytorch-optimizer>=3.3.2",
     "rich>=13.9.4",
     "scikit-learn>=1.6.0",
+    "tensorboard>=2.18.0",
     "torch==2.5.1+cu124",
     "torchvision==0.20.1+cu124",
 ]
