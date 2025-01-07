@@ -1,8 +1,10 @@
 # Libs >>>
+import os
 import gc
+import sys
 import time
 import torch
-import inspect  # noqa: F401
+import shutil
 from torch import nn
 from rich import box
 from functools import wraps
@@ -25,6 +27,7 @@ from rich.progress import (
     SpinnerColumn,
     MofNCompleteColumn,
 )
+from contextlib import suppress
 from contextlib import contextmanager
 from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
@@ -84,24 +87,118 @@ def console_prefix(console, prefix=" | ", prefix_style: Style = None):
         console.print = original_print
 
 
+# Clean up >>>
+def cleanup(local_vars: dict):
+    # Make a console
+    console = Console()
+
+    # Prefix
+    cleanup_prefix = "[Cleanup] "
+
+    with console_prefix(console, cleanup_prefix):
+        # Clean up memory
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        # Close the progress bar
+        with suppress(Exception):
+            local_vars["progress_bar"].stop()
+            console.print("Successfully closed the progress bar.")
+
+        # Save the best model
+        with suppress(Exception):
+            if local_vars.get("epoch", 0) <= 1:
+                torch.save(
+                    local_vars["early_stopping"].load_best_model(
+                        local_vars["model"], raise_error=True
+                    ),
+                    os.path.join(local_vars["model_save_path"], "best_model.pth"),
+                )
+                console.print("Successfully saved the best model.")
+
+        # Close the tensorboard writers
+        with suppress(Exception):
+            local_vars["tbw_val"].close()
+            local_vars["tbw_train"].close()
+            console.print("Successfully closed the tensorboard writers.")
+            local_vars["tbw_data"].close()
+
+        # Delete short tensorboard logs
+        with suppress(Exception):
+            if local_vars.get("epoch", 0) <= 1:
+                console.print(
+                    "Tensorboard logs are too short, deleting them... (delete them manually if no confirmation is given)"
+                )
+                shutil.rmtree(local_vars["tb_log_dir"])
+                console.print("Successfully deleted the short tensorboard logs.")
+
+        # Delete the model save path
+        with suppress(Exception):
+            if local_vars.get("epoch", 0) <= 1:
+                console.print(
+                    "Training was too short, deleting the model save path... (delete it manually if no confirmation is given)"
+                )
+                shutil.rmtree(local_vars["model_save_path"])
+                console.print("Successfully deleted the model save path.")
+
+        # End
+        console.print("Done.")
+
+
 # Error handling >>>
 def error_handler(log_errors: bool = True, allow_keyboard_interrupt: bool = True):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
+            # Make a rich console
+            console = Console()
+
+            # Prefix
+            error_handler_prefix = "[Error Handler]"
+
+            # Get the locals of the function
+            local_vars = {}
+
+            def trace_func(frame, event, arg):
+                if event == "return":
+                    local_vars.update(frame.f_locals)
+                return trace_func
+
+            sys.settrace(trace_func)
+
+            # Run the function
             try:
-                return func(*args, **kwargs)
+                results = func(*args, **kwargs)
+            except KeyboardInterrupt:
+                if allow_keyboard_interrupt:
+                    console.print(f"\n\n{error_handler_prefix} KeyboardInterrupt!")
+                else:
+                    console.print_exception(show_locals=True)
+                return "!KeyboardInterrupt"
             except Exception:
-                pass
+                if log_errors:
+                    console.print_exception(show_locals=True)
+                return "!Exception"
+            finally:
+                # Sleep for a bit to let the console catch up
+                time.sleep(2)
 
+                # Reset the trace function
+                sys.settrace(None)
 
-# Clean up >>>
-def cleanup(local_vars: dict):
-    pass
+                # Do the cleanup (assuming cleanup is defined elsewhere)
+                cleanup(local_vars)
+
+            # Return the results
+            return results
+
+        return wrapper
+
+    return decorator
 
 
 # Main >>>
-# @error_handler()
+@error_handler()
 def fit(
     model: nn.Module,
     train_dataloader: DynamicArg,
@@ -124,6 +221,7 @@ def fit(
     mixed_precision: bool = True,
     mixed_precision_dtype: torch.dtype = torch.bfloat16,
     experiment_name: str = "!auto",
+    model_export_path: str = "./models",
     log_debugging: bool = True,
     force_cpu: bool = False,
 ):
@@ -131,7 +229,7 @@ def fit(
     console = Console()
 
     # Make experiment name
-    if experiment_name == "!auto":
+    if experiment_name == "!auto":  # TODO Check for duplicates
         experiment_name = f"{time.strftime('%Y-%m-%d_%H-%M-%S')}"
 
     # Start msg
@@ -159,6 +257,11 @@ def fit(
         tbw_data = SummaryWriter(log_dir=f"{tb_log_dir}/Data", max_queue=25)
     tbw_val = SummaryWriter(log_dir=f"{tb_log_dir}/Val", flush_secs=45)
     tbw_train = SummaryWriter(log_dir=f"{tb_log_dir}/Train", flush_secs=45)
+
+    # Make the model save path
+    model_save_path = f"{model_export_path}/{experiment_name}"
+    os.makedirs(model_save_path, exist_ok=True)
+    console.print(f"Model save path: [green]{model_save_path}")
 
     # Make the early stopping
     early_stopping = EarlyStopping(
@@ -398,3 +501,6 @@ def fit(
                 console.print("Stopping the training early...")
                 # End
                 break
+
+            # Save the latest model
+            torch.save(model, os.path.join(model_save_path, "latest_model.pth"))

@@ -68,6 +68,7 @@ def main():
         num_workers=dataLoader_num_workers,
         persistent_workers=True,
         prefetch_factor=2,
+        timeout=120,
         pin_memory=True,
         drop_last=False,
     )
@@ -90,6 +91,7 @@ def main():
             num_workers=dataLoader_num_workers,
             persistent_workers=True,
             prefetch_factor=2,
+            timeout=120,
             pin_memory=True,
             drop_last=True,
         )

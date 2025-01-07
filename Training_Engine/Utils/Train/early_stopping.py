@@ -2,7 +2,11 @@
 import os
 import glob
 import torch
+import warnings
 from rich import print
+
+# Warnings >>>
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 # Main >>>
@@ -92,18 +96,25 @@ class EarlyStopping:
                     f"{self.print_indicator} [red]Triggered! [reset]Best results: Epoch {self.best_epoch} with {self.monitor_name} of {self.best_monitor:.4f}"
                 )
 
-    def load_best_model(self, model: torch.nn.Module):
+    def load_best_model(self, model: torch.nn.Module, raise_error: bool = False):
         """Load the best model from the cache directory.
 
         Args:
             model (torch.nn.Module): The model to load the best state into.
+            raise_error (bool, optional): Whether to raise an error if the best model is not found. Defaults to False.
         """
         if os.path.exists(os.path.join(self.cache_dir, self.model_save_name)):
             model.load_state_dict(
                 torch.load(os.path.join(self.cache_dir, self.model_save_name))
             )
-            print(
-                f"{self.print_indicator} [green]Loaded the best model from {self.cache_dir}"
-            )
+            if self.verbose:
+                print(
+                    f"{self.print_indicator} [green]Loaded the best model from {self.cache_dir}"
+                )
         else:
-            print(f"{self.print_indicator} [red]No model found in {self.cache_dir}")
+            if self.verbose:
+                print(f"{self.print_indicator} [red]No model found in {self.cache_dir}")
+            if raise_error:
+                raise FileNotFoundError(
+                    f"No model found in {self.cache_dir}. Please check the cache directory."
+                )

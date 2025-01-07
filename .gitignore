@@ -10,6 +10,8 @@ wheels/
 .venv
 
 # project-specific files
+
+# Database
 /Database/Tools
 /Database/Validation
 /Database/Data
@@ -22,3 +24,6 @@ wheels/
 
 # Tensorboard logs
 /Logs/runs
+
+# Models
+/models
