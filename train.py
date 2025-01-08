@@ -11,7 +11,6 @@ from torchvision.transforms import v2 as v2_transforms
 # Modules >>>
 from Training_Engine.Utils.Base.device import get_device
 from Training_Engine.Utils.Data.data_loader import Torch_ImgDataloader, make_data_pairs
-from Training_Engine.Utils.Data.RgbRandAugment import rgb_augmentation_transform
 from Training_Engine.Utils.Base.dynamic_args import DynamicArg
 from Training_Engine.trainer import fit
 
@@ -81,9 +80,9 @@ def main():
                 backend=dl_backend,
                 color_mode=img_format,
                 dtype=dtype,
-                transforms=rgb_augmentation_transform(
-                    img_size=img_res,
-                    magnitude=max(min((env_args["epoch"]) / (50 / 6.2), 8.2), 0),
+                transforms=v2_transforms.RandAugment(
+                    num_ops=2,
+                    magnitude=min((env_args["epoch"]) / (50 / 16), 30),
                 ),
             ),
             batch_size=train_batchsize,
