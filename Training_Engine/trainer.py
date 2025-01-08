@@ -107,7 +107,7 @@ def cleanup(local_vars: dict):
 
         # Save the best model
         with suppress(Exception):
-            if local_vars.get("epoch", 0) <= 1:
+            if local_vars["epoch"] > 1 and "TRAINING_FINISHED" not in local_vars:
                 torch.save(
                     local_vars["early_stopping"].load_best_model(
                         local_vars["model"], raise_error=True
@@ -146,51 +146,33 @@ def cleanup(local_vars: dict):
 
 
 # Error handling >>>
-def error_handler(log_errors: bool = True, allow_keyboard_interrupt: bool = True):
+def error_handler(allow_keyboard_interrupt: bool = True):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # Make a rich console
             console = Console()
-
-            # Prefix
             error_handler_prefix = "[Error Handler]"
-
-            # Get the locals of the function
             local_vars = {}
 
-            def trace_func(frame, event, arg):
-                if event == "return":
-                    local_vars.update(frame.f_locals)
-                return trace_func
-
-            sys.settrace(trace_func)
-
-            # Run the function
             try:
                 results = func(*args, **kwargs)
+                return results
             except KeyboardInterrupt:
                 if allow_keyboard_interrupt:
                     console.print(f"\n\n{error_handler_prefix} KeyboardInterrupt!")
                 else:
-                    console.print_exception(show_locals=True)
+                    console.print_exception(show_locals=False)
                 return "!KeyboardInterrupt"
-            except Exception:
-                if log_errors:
-                    console.print_exception(show_locals=True)
+            except Exception as e:  # noqa: F841
+                exc_type, exc_value, tb = sys.exc_info()
+                if tb:
+                    frame = tb.tb_frame
+                    local_vars.update(frame.f_locals)
+                console.print_exception(show_locals=False)
                 return "!Exception"
             finally:
-                # Sleep for a bit to let the console catch up
                 time.sleep(2)
-
-                # Reset the trace function
-                sys.settrace(None)
-
-                # Do the cleanup (assuming cleanup is defined elsewhere)
                 cleanup(local_vars)
-
-            # Return the results
-            return results
 
         return wrapper
 
@@ -332,8 +314,21 @@ def fit(
                         pad_value=0,
                         format="CHW",
                     ),
-                    epoch,
+                    epoch - 1,
                 )
+
+            # Log parameters
+            if log_debugging:
+                for name, param in model.named_parameters():
+                    param_tag, param_type = (
+                        ">".join(name.replace(".", ">").split(">")[:-1]),
+                        name.replace(".", ">").split(">")[-1],
+                    )
+                    tbw_data.add_histogram(
+                        f"Train-Parameters|>>{param_tag}/{param_type}",
+                        param.data.cpu().numpy(),
+                        epoch - 1,
+                    )
 
             # Prep
             model.train()
@@ -504,3 +499,18 @@ def fit(
 
             # Save the latest model
             torch.save(model, os.path.join(model_save_path, "latest_model.pth"))
+
+    # Load the best model + save it
+    early_stopping.load_best_model(model)
+    torch.save(model, os.path.join(model_save_path, "best_model.pth"))
+
+    # Put training finished flag
+    TRAINING_FINISHED = (
+        True  # Used by the cleanup function to determine if the training has ended
+    )
+
+    # return model, metrics_hist
+    return {
+        "best_model": early_stopping.load_best_model(model),
+        "metrics_hist": metrics_hist,
+    }
