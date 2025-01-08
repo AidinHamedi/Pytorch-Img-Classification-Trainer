@@ -408,10 +408,10 @@ def fit(
     # Handel errors
     except KeyboardInterrupt:
         console.print(
-            "[bold red]KeyboardInterrupt detected.[yellow] Stopping the training..."
+            "\n\n[bold red]KeyboardInterrupt detected.[yellow] Stopping the training..."
         )
     except Exception:
-        console.print("[bold red]An error occurred during training.")
+        console.print("\n\n[bold red]An error occurred during training.")
         console.print_exception(show_locals=False)
 
     # Close the progress bar
@@ -431,23 +431,23 @@ def fit(
                 "Training was too short, deleting the model save path... (delete it manually if no confirmation is given)"
             )
             shutil.rmtree(model_save_path)
-            console.print("Successfully deleted the model save path.")
+            console.print("[underline]Successfully deleted the model save path.")
 
     # Close the tensorboard writers
     with suppress(Exception):
         tbw_val.close()
         tbw_train.close()
-        console.print("Successfully closed the tensorboard writers.")
+        console.print("[underline]Successfully closed the tensorboard writers.")
         tbw_data.close()
 
     # Delete short tensorboard logs
     with suppress(Exception):
-        if epoch > 1:
+        if not epoch > 1:
             console.print(
                 "Tensorboard logs are too short, deleting them... (delete them manually if no confirmation is given)"
             )
             shutil.rmtree(tb_log_dir)
-            console.print("Successfully deleted the short tensorboard logs.")
+            console.print("[underline]Successfully deleted the short tensorboard logs.")
 
     # return model, metrics_hist
     return {
