@@ -5,7 +5,6 @@ from rich import print
 from rich import pretty
 import pytorch_optimizer as TP_optim
 from torch.utils.data import DataLoader
-from efficientnet_pytorch import EfficientNet
 from torchvision.transforms import v2 as v2_transforms
 
 # Modules >>>
@@ -21,23 +20,22 @@ eval_data_dir = (
 )
 img_res = [224, 224]  # img loading resolution
 img_format = "rgb"  # rgb, grayscale
-dl_backend = "opencv"  # pil or opencv. opencv some times doesn't work properly
+dl_backend = "pil"  # pil or opencv. opencv some times doesn't work properly
 dtype = torch.float32  # data type
-auto_split = True  # Auto split dataset (Will auto split the data in "main_data_dir" to Train and Test, Wont use "eval_data_dir")
+auto_split = False  # Auto split dataset (Will auto split the data in "main_data_dir" to Train and Test, Wont use "eval_data_dir")
 split_ratio = 0.8  # Split (Train&Test) ~ auto_split==True
 class_weighting_method = "linear"  # class weighting method
+dataLoader_num_workers = 8
 
 # Train Conf >>>
 train_batchsize = 32
 eval_batchsize = 32
+train_gradient_accumulation = None
 dataLoader_num_workers = 8
-
-# Prep >>>
-pretty.install()
 
 
 # Main >>>
-def main():
+def train(extra_args: dict):
     # Init msg
     print("[bold green]Starting...")
 
@@ -80,9 +78,14 @@ def main():
                 backend=dl_backend,
                 color_mode=img_format,
                 dtype=dtype,
-                transforms=v2_transforms.RandAugment(
-                    num_ops=2,
-                    magnitude=min((env_args["epoch"]) / (50 / 16), 30),
+                transforms=v2_transforms.Compose(
+                    [
+                        v2_transforms.Resize(img_res),
+                        v2_transforms.RandAugment(
+                            num_ops=2,
+                            magnitude=round(min((env_args["epoch"]) / (50 / 16), 30)),
+                        ),
+                    ]
                 ),
             ),
             batch_size=train_batchsize,
@@ -98,11 +101,12 @@ def main():
 
     # Make the model
     print("[bold green]Making the model...")
+    from efficientnet_pytorch import EfficientNet
+
     model = EfficientNet.from_name(
-        "efficientnet-b0",
+        extra_args["model"],
         include_top=True,
         num_classes=data_pairs["num_classes"],
-        dropout_rate=0.11,
         in_channels=3 if img_format == "rgb" else 1,
     ).to(
         get_device()
@@ -146,9 +150,14 @@ def main():
         DynamicArg(mode="static", default_value=eval_dataloader),
         optimizer,
         loss_fn,
+        gradient_accumulation=bool(train_gradient_accumulation),
+        gradient_accumulation_steps=DynamicArg(
+            default_value=train_gradient_accumulation, mode="static"
+        ),
+        early_stopping_cnf={
+            "patience": 8,
+            "monitor": "Cohen's Kappa",
+            "mode": "max",
+            "min_delta": 0.00001,
+        },
     )
-
-
-# Start >>>
-if __name__ == "__main__":
-    main()
