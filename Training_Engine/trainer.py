@@ -4,6 +4,7 @@ import gc
 import time
 import torch
 import shutil
+import numpy as np
 from torch import nn
 from rich import box
 from rich.table import Table
@@ -405,10 +406,11 @@ def fit(
                 for metric in train_eval:
                     tbw_train.add_scalar(f"Metrics/{metric}", train_eval[metric], epoch)
                     tbw_val.add_scalar(f"Metrics/{metric}", test_eval[metric], epoch)
-                tbw_train.add_scalar(
-                    "Metrics/Iter-Loss", train_loss_data, epoch * train_total_batches
-                )
-                tbw_data.add_histogram("Loss/Train", train_loss_data, epoch)
+                for i, batch_loss in enumerate(train_loss_data, start=1): # TODO hmmm just look at it you will see it
+                    tbw_train.add_scalar(
+                        "Metrics/Iter-Loss", batch_loss, epoch * i
+                    )
+                tbw_data.add_histogram("Loss/Train", np.asarray(train_loss_data), epoch)
 
                 # Show time elapsed
                 console.print(

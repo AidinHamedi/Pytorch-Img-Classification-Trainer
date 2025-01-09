@@ -1,7 +1,6 @@
 # Libs >>>
 import os
 import tomllib
-from pathlib import Path
 from rich import print
 
 # Modules >>>
