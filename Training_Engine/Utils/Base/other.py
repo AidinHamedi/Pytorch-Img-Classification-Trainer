@@ -54,7 +54,7 @@ def format_seconds(seconds: int) -> str:
     if minutes > 0:
         time_parts.append(f"{minutes}m")
     if seconds > 0:
-        time_parts.append(f"{seconds}s")
+        time_parts.append(str(seconds) + "s")
 
     if time_parts == []:
         return "0s"

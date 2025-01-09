@@ -28,10 +28,10 @@ class_weighting_method = "linear"  # class weighting method
 dataLoader_num_workers = 8
 
 # Train Conf >>>
-train_batchsize = 16
+train_batchsize = 32
 eval_batchsize = 32
 train_gradient_accumulation = None
-dataLoader_num_workers = 10
+dataLoader_num_workers = 8
 
 
 # Main >>>
@@ -160,4 +160,8 @@ def train(extra_args: dict):
             "mode": "max",
             "min_delta": 0.00001,
         },
+        opt_features = {
+            "gradient normalization": extra_args["gradient_normalization"],
+            "gradient centralization": extra_args["gradient_centralization"]
+        }
     )

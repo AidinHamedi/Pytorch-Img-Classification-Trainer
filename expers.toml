@@ -1,20 +1,19 @@
 [Base]
-model = "efficientnet-b0"
-
-[B1]
 model = "efficientnet-b1"
+gradient_centralization = false
+gradient_normalization = false
 
-[B2]
-model = "efficientnet-b2"
+[gc]
+model = "efficientnet-b1"
+gradient_centralization = true
+gradient_normalization = false
 
-[B3]
-model = "efficientnet-b3"
+[gn]
+model = "efficientnet-b1"
+gradient_centralization = false
+gradient_normalization = true
 
-[B4]
-model = "efficientnet-b4"
-
-[B5]
-model = "efficientnet-b5"
-
-[B6]
-model = "efficientnet-b6"
+[gn-gc]
+model = "efficientnet-b1"
+gradient_centralization = true
+gradient_normalization = true

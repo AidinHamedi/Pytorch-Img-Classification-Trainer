@@ -41,6 +41,7 @@ from .Utils.Data.debug import (
 )
 from .Utils.Train.early_stopping import EarlyStopping
 from .Utils.Train.eval import calc_metrics, eval as eval_model
+from .Utils.Train.grad_mod import apply_gradient_modifier
 
 # Conf >>>
 epoch_verbose_prefix = " | "
@@ -106,7 +107,7 @@ def fit(
         default_value=4, mode="static"
     ),
     mixed_precision: bool = True,
-    mixed_precision_dtype: torch.dtype = torch.bfloat16,
+    mixed_precision_dtype: torch.dtype = torch.float16,
     opt_features: dict = {"gradient centralization": True},
     experiment_name: str = "!auto",
     model_export_path: str = "./models",
@@ -150,12 +151,15 @@ def fit(
     model_save_path = f"{model_export_path}/{experiment_name}"
     os.makedirs(model_save_path, exist_ok=True)
     console.print(f"Model save path: [green]{model_save_path}")
-    
+
     # Train mods
     train_mods = {
         "gradient centralization": opt_features.get("gradient centralization", False),
         "gradient normalization": opt_features.get("gradient normalization", False),
     }
+    console.print("[yellow]Train mods:")
+    for key in train_mods:
+        console.print(f" - {key}: {train_mods[key]}")
 
     # Make the early stopping
     early_stopping = EarlyStopping(
@@ -239,7 +243,7 @@ def fit(
                         )
                         tbw_data.add_histogram(
                             f"Train-Parameters|>>{param_tag}/{param_type}",
-                            param.data.cpu().numpy(),
+                            param.data.cpu(),
                             epoch - 1,
                         )
 
@@ -314,14 +318,14 @@ def fit(
                         # Gradient unscale (For supporting grad modifiers like gradient clipping)
                         if mixed_precision:
                             mpt_scaler.unscale_(optimizer)
-                            
+
                         # Centralize gradients
                         if "gradient centralization" in train_mods:
-                            TP_optim.centralize_gradient(model.parameters().grad) 
-                        
+                            apply_gradient_modifier(model, TP_optim.centralize_gradient)
+            
                         # Gradient normalization
                         if "gradient normalization" in train_mods:
-                            TP_optim.normalize_gradient(model.parameters().grad)
+                            apply_gradient_modifier(model, TP_optim.normalize_gradient)
 
                         # Optimizer step
                         if mixed_precision:
@@ -401,7 +405,10 @@ def fit(
                 for metric in train_eval:
                     tbw_train.add_scalar(f"Metrics/{metric}", train_eval[metric], epoch)
                     tbw_val.add_scalar(f"Metrics/{metric}", test_eval[metric], epoch)
-                tbw_train.add_scalar("Metrics/Iter-Loss", train_loss_data, epoch * train_total_batches)
+                tbw_train.add_scalar(
+                    "Metrics/Iter-Loss", train_loss_data, epoch * train_total_batches
+                )
+                tbw_data.add_histogram("Loss/Train", train_loss_data, epoch)
 
                 # Show time elapsed
                 console.print(
