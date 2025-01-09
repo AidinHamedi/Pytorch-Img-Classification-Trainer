@@ -323,7 +323,7 @@ def fit(
                         # Centralize gradients
                         if train_mods["gradient centralization"]:
                             apply_gradient_modifier(model, TP_optim.centralize_gradient)
-            
+
                         # Gradient normalization
                         if train_mods["gradient normalization"]:
                             apply_gradient_modifier(model, TP_optim.normalize_gradient)
@@ -406,15 +406,19 @@ def fit(
                 for metric in train_eval:
                     tbw_train.add_scalar(f"Metrics/{metric}", train_eval[metric], epoch)
                     tbw_val.add_scalar(f"Metrics/{metric}", test_eval[metric], epoch)
-                for i, batch_loss in enumerate(train_loss_data, start=1): # TODO hmmm just look at it you will see it
+                for i, batch_loss in enumerate(
+                    train_loss_data, start=1
+                ):  # TODO hmmm just look at it you will see it
                     tbw_train.add_scalar(
-                        "Metrics/Iter-Loss", batch_loss, epoch * i
+                        "Metrics/Iter-Loss",
+                        batch_loss,
+                        ((epoch - 1) * train_dataloader_len) + i,
                     )
                 tbw_data.add_histogram("Loss/Train", np.asarray(train_loss_data), epoch)
 
                 # Show time elapsed
                 console.print(
-                    f"Epoch time: [cyan]{format_seconds(time.time() - epoch_start_time)}s"
+                    f"Epoch time: [cyan]{format_seconds(time.time() - epoch_start_time)}"
                 )
 
                 # Early stopping
