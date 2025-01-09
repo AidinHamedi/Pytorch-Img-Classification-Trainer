@@ -28,10 +28,10 @@ class_weighting_method = "linear"  # class weighting method
 dataLoader_num_workers = 8
 
 # Train Conf >>>
-train_batchsize = 32
+train_batchsize = 16
 eval_batchsize = 32
 train_gradient_accumulation = None
-dataLoader_num_workers = 8
+dataLoader_num_workers = 10
 
 
 # Main >>>
@@ -64,7 +64,7 @@ def train(extra_args: dict):
         shuffle=False,
         num_workers=dataLoader_num_workers,
         persistent_workers=True,
-        prefetch_factor=2,
+        prefetch_factor=3,
         timeout=120,
         pin_memory=True,
         drop_last=False,
@@ -92,7 +92,7 @@ def train(extra_args: dict):
             shuffle=True,
             num_workers=dataLoader_num_workers,
             persistent_workers=True,
-            prefetch_factor=2,
+            prefetch_factor=3,
             timeout=120,
             pin_memory=True,
             drop_last=True,

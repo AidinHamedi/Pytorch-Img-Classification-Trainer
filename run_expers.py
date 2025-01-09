@@ -41,9 +41,10 @@ def main():
     expers = load_config(file_name=config_file_name)
     print("[underline]Expers loaded successfully.")
     
-    print(f"[bold green]Starting expers...")
+    # Run the expers
+    print("[bold green]Starting expers...")
     for exp_name, exp_conf in expers.items():
-        print(f"[bold green]Starting exper {exp_name}...")
+        print(f"[bold green]Starting exper {exp_name}...\n[default]---------------------------------------------------------------------------")
         train(exp_conf)
         print(f"[bold green]Finished exper {exp_name}.")
 

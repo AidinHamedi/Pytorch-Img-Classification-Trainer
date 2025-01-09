@@ -27,6 +27,7 @@ from rich.progress import (
 )
 from contextlib import suppress
 from contextlib import contextmanager
+import pytorch_optimizer as TP_optim
 from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
 
@@ -106,6 +107,7 @@ def fit(
     ),
     mixed_precision: bool = True,
     mixed_precision_dtype: torch.dtype = torch.bfloat16,
+    opt_features: dict = {"gradient centralization": True},
     experiment_name: str = "!auto",
     model_export_path: str = "./models",
     log_debugging: bool = True,
@@ -148,6 +150,12 @@ def fit(
     model_save_path = f"{model_export_path}/{experiment_name}"
     os.makedirs(model_save_path, exist_ok=True)
     console.print(f"Model save path: [green]{model_save_path}")
+    
+    # Train mods
+    train_mods = {
+        "gradient centralization": opt_features.get("gradient centralization", False),
+        "gradient normalization": opt_features.get("gradient normalization", False),
+    }
 
     # Make the early stopping
     early_stopping = EarlyStopping(
@@ -303,11 +311,17 @@ def fit(
                         # Update the batch_idx
                         batch_idx += 1
 
-                        # Gradient unscale
-                        if mixed_precision and (
-                            False  # TODO
-                        ):
+                        # Gradient unscale (For supporting grad modifiers like gradient clipping)
+                        if mixed_precision:
                             mpt_scaler.unscale_(optimizer)
+                            
+                        # Centralize gradients
+                        if "gradient centralization" in train_mods:
+                            TP_optim.centralize_gradient(model.parameters().grad) 
+                        
+                        # Gradient normalization
+                        if "gradient normalization" in train_mods:
+                            TP_optim.normalize_gradient(model.parameters().grad)
 
                         # Optimizer step
                         if mixed_precision:
@@ -387,6 +401,7 @@ def fit(
                 for metric in train_eval:
                     tbw_train.add_scalar(f"Metrics/{metric}", train_eval[metric], epoch)
                     tbw_val.add_scalar(f"Metrics/{metric}", test_eval[metric], epoch)
+                tbw_train.add_scalar("Metrics/Iter-Loss", train_loss_data, epoch * train_total_batches)
 
                 # Show time elapsed
                 console.print(
