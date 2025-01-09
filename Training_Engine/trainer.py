@@ -321,11 +321,11 @@ def fit(
                             mpt_scaler.unscale_(optimizer)
 
                         # Centralize gradients
-                        if "gradient centralization" in train_mods:
+                        if train_mods["gradient centralization"]:
                             apply_gradient_modifier(model, TP_optim.centralize_gradient)
             
                         # Gradient normalization
-                        if "gradient normalization" in train_mods:
+                        if train_mods["gradient normalization"]:
                             apply_gradient_modifier(model, TP_optim.normalize_gradient)
 
                         # Optimizer step

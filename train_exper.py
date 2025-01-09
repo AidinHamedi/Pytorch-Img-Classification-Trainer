@@ -28,7 +28,7 @@ class_weighting_method = "linear"  # class weighting method
 dataLoader_num_workers = 8
 
 # Train Conf >>>
-train_batchsize = 32
+train_batchsize = 16
 eval_batchsize = 32
 train_gradient_accumulation = None
 dataLoader_num_workers = 8
