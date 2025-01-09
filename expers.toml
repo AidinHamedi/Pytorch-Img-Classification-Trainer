@@ -1,19 +1,11 @@
-[Base]
-model = "efficientnet-b0"
-gradient_centralization = false
-gradient_normalization = false
-
 [gc]
 model = "efficientnet-b0"
 gradient_centralization = true
 gradient_normalization = false
+agc=false
 
-[gn]
-model = "efficientnet-b0"
-gradient_centralization = false
-gradient_normalization = true
-
-[gn-gc]
+[gc-agc]
 model = "efficientnet-b0"
 gradient_centralization = true
-gradient_normalization = true
+gradient_normalization = false
+agc=true

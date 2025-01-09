@@ -43,6 +43,7 @@ from .Utils.Data.debug import (
 from .Utils.Train.early_stopping import EarlyStopping
 from .Utils.Train.eval import calc_metrics, eval as eval_model
 from .Utils.Train.grad_mod import apply_gradient_modifier
+from .Utils.Train.adaptive_gradient_clipping import adaptive_gradient_clipping
 
 # Conf >>>
 epoch_verbose_prefix = " | "
@@ -157,6 +158,9 @@ def fit(
     train_mods = {
         "gradient centralization": opt_features.get("gradient centralization", False),
         "gradient normalization": opt_features.get("gradient normalization", False),
+        "adaptive gradient clipping": opt_features.get(
+            "adaptive gradient clipping", [False, 0.01]
+        ),
     }
     console.print("[yellow]Train mods:")
     for key in train_mods:
@@ -323,6 +327,12 @@ def fit(
                         # Centralize gradients
                         if train_mods["gradient centralization"]:
                             apply_gradient_modifier(model, TP_optim.centralize_gradient)
+
+                        # Adaptive Gradient clipping
+                        if train_mods["adaptive gradient clipping"]:
+                            adaptive_gradient_clipping(
+                                model, 1e-3, train_mods["adaptive gradient clipping"][1]
+                            )
 
                         # Gradient normalization
                         if train_mods["gradient normalization"]:

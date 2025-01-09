@@ -162,6 +162,7 @@ def train(extra_args: dict):
         },
         opt_features = {
             "gradient normalization": extra_args["gradient_normalization"],
-            "gradient centralization": extra_args["gradient_centralization"]
+            "gradient centralization": extra_args["gradient_centralization"],
+            "adaptive gradient clipping": [extra_args["agc"], 0.01],
         }
     )
