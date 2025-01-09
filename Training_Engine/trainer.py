@@ -445,15 +445,15 @@ def fit(
     # Close the progress bar
     with suppress(Exception):
         progress_bar.stop()
-        console.print("Successfully closed the progress bar.")
+        console.print("[underline]Successfully closed the progress bar.")
 
     # Load the best model + save it / delete the save path
     with suppress(Exception):
         if epoch > 1:
-            console.print("[yellow]Loading the best model...")
             early_stopping.load_best_model(model, raise_error=True)
-            console.print("[yellow]Saving the best model...")
+            console.print("[underline]Successfully loaded the best model.")
             torch.save(model, os.path.join(model_save_path, "best_model.pth"))
+            console.print("[underline]Successfully saved the best model.")
         else:
             console.print(
                 "Training was too short, deleting the model save path... (delete it manually if no confirmation is given)"

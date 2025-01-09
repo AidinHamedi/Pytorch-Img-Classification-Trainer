@@ -13,13 +13,19 @@ def apply_gradient_modifier(model, modifier_fn, *args, **kwargs):
     Args:
         model (nn.Module): The model whose gradients will be modified.
         modifier_fn (callable): A function that takes a gradient tensor and returns
-            a modified gradient tensor. The function can also accept additional arguments.
+            a modified gradient tensor or modifies the tensor in place. The function
+            can also accept additional arguments.
         *args: Additional positional arguments to pass to modifier_fn.
         **kwargs: Additional keyword arguments to pass to modifier_fn.
     """
     if not callable(modifier_fn):
         raise TypeError("modifier_fn must be a callable function.")
+    
     for param in model.parameters():
         if param.requires_grad and param.grad is not None:
+            # Apply the modifier function
             modified_grad = modifier_fn(param.grad, *args, **kwargs)
-            param.grad = modified_grad
+            
+            # If modifier_fn returns a new gradient, assign it
+            if modified_grad is not None:
+                param.grad = modified_grad
