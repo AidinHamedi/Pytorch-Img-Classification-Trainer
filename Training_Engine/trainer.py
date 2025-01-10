@@ -182,6 +182,7 @@ def fit(
     # Train vars
     mpt_scaler = GradScaler(device=device_str, enabled=mixed_precision)
     metrics_hist = {"Train": [], "Val": []}
+    train_total_fp = 0
 
     # Dynamic args manager
     da_manager = DA_Manager()
@@ -420,13 +421,11 @@ def fit(
                 for metric in train_eval:
                     tbw_train.add_scalar(f"Metrics/{metric}", train_eval[metric], epoch)
                     tbw_val.add_scalar(f"Metrics/{metric}", test_eval[metric], epoch)
-                for i, batch_loss in enumerate(
-                    train_loss_data, start=1
-                ):  # TODO hmmm just look at it you will see it
+                for i, batch_loss in enumerate(train_loss_data, start=1):
                     tbw_train.add_scalar(
                         "Metrics/Iter-Loss",
                         batch_loss,
-                        ((epoch - 1) * train_dataloader_len) + i, # BUG train_dataloader_len can chnage
+                        train_total_fp + i,
                     )
                 tbw_data.add_histogram("Loss/Train", np.asarray(train_loss_data), epoch)
                 tbw_train.add_scalar(
@@ -437,6 +436,9 @@ def fit(
                     ),
                     epoch,
                 )
+
+                # Update some vars
+                train_total_fp += train_dataloader_len
 
                 # Show time elapsed
                 console.print(

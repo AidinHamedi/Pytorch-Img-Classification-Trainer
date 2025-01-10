@@ -10,6 +10,7 @@ from train_exper import train
 config_file_name = "expers.toml"
 Conf_base_dir = "."
 
+
 # Config loader >>>
 def load_config(raise_if_err: bool = True, file_name: str = None) -> dict:
     """
@@ -33,19 +34,23 @@ def load_config(raise_if_err: bool = True, file_name: str = None) -> dict:
             # End
             return {"Error": str(err)}
 
+
 # Main >>>
 def main():
     # Load expers
     print(f"[bold green]Loading expers from {config_file_name}...")
     expers = load_config(file_name=config_file_name)
     print("[underline]Expers loaded successfully.")
-    
+
     # Run the expers
     print("[bold green]Starting expers...")
     for exp_name, exp_conf in expers.items():
-        print(f"[bold green]Starting exper {exp_name}...\n[default]---------------------------------------------------------------------------")
+        print(
+            f"[bold green]Starting exper {exp_name}...\n[default]---------------------------------------------------------------------------"
+        )
         train(exp_conf)
         print(f"[bold green]Finished exper {exp_name}.")
+
 
 # Start >>>
 if __name__ == "__main__":

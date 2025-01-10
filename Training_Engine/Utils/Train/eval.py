@@ -186,40 +186,42 @@ def eval(
 def calculate_stability(data, window_size=30):
     """
     Calculate the stability of a dataset based on the R² between the data and its moving average.
-    
+
     Parameters:
         data (list or np.array): The input data (e.g., batch losses).
         window_size (int): Size of the moving average window for detrending.
-    
+
     Returns:
         stability_score (float): A score representing stability (0 = full noise, 1 = perfect stability).
     """
     data = np.asarray(data)
     if window_size > len(data):
         window_size = len(data)
-    
+
     # Calculate moving average
-    moving_avg = np.convolve(data, np.ones(window_size)/window_size, mode='valid')
-    
+    moving_avg = np.convolve(data, np.ones(window_size) / window_size, mode="valid")
+
     # Pad the moving average to match the original data length
     pad_width = (window_size - 1) // 2
-    moving_avg_padded = np.pad(moving_avg, (pad_width, len(data) - len(moving_avg) - pad_width), mode='edge')
-    
+    moving_avg_padded = np.pad(
+        moving_avg, (pad_width, len(data) - len(moving_avg) - pad_width), mode="edge"
+    )
+
     # Calculate residuals
     residuals = data - moving_avg_padded
-    
+
     # Calculate total sum of squares (SS_tot)
     mean_data = np.mean(data)
     SS_tot = np.sum((data - mean_data) ** 2)
-    
+
     # Calculate residual sum of squares (SS_res)
-    SS_res = np.sum(residuals ** 2)
-    
+    SS_res = np.sum(residuals**2)
+
     # Calculate R²
     if SS_tot == 0:
         r_squared = 1.0  # Perfectly stable data
     else:
         r_squared = 1 - (SS_res / SS_tot)
-        r_squared = max(0, r_squared) 
-    
+        r_squared = max(0, r_squared)
+
     return r_squared

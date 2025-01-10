@@ -1,8 +1,11 @@
 # Libs >>>
 from pytorch_optimizer import agc
 
+
 # Main >>>
-def adaptive_gradient_clipping(model, agc_eps: float, agc_clip_val: float, eps: float = 1e-6, exclude_bias=True):
+def adaptive_gradient_clipping(
+    model, agc_eps: float, agc_clip_val: float, eps: float = 1e-6, exclude_bias=True
+):
     r"""Apply adaptive gradient clipping to the model's parameters, excluding certain parameters if specified.
 
     :param model: torch.nn.Module. The model whose gradients are to be clipped.
