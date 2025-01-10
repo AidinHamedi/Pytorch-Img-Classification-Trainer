@@ -62,7 +62,7 @@ There are some utils with the training engine that you can use for like loading 
 
 ## 📷 Example Output
 
-![Img](doc\example.png)
+![Img](./doc/example.png)
 
 ## 📝 License
 
