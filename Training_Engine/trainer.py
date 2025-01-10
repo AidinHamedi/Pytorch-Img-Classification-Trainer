@@ -41,7 +41,11 @@ from .Utils.Data.debug import (
     retrieve_samples as dl_retrieve_samples,
 )
 from .Utils.Train.early_stopping import EarlyStopping
-from .Utils.Train.eval import calc_metrics, eval as eval_model
+from .Utils.Train.eval import (
+    calc_metrics,
+    eval as eval_model,
+    calculate_stability,
+)
 from .Utils.Train.grad_mod import apply_gradient_modifier
 from .Utils.Train.adaptive_gradient_clipping import adaptive_gradient_clipping
 
@@ -422,9 +426,17 @@ def fit(
                     tbw_train.add_scalar(
                         "Metrics/Iter-Loss",
                         batch_loss,
-                        ((epoch - 1) * train_dataloader_len) + i,
+                        ((epoch - 1) * train_dataloader_len) + i, # BUG train_dataloader_len can chnage
                     )
                 tbw_data.add_histogram("Loss/Train", np.asarray(train_loss_data), epoch)
+                tbw_train.add_scalar(
+                    "Metrics/Train stability",
+                    calculate_stability(
+                        train_loss_data,
+                        window_size=train_dataloader_len // 2,
+                    ),
+                    epoch,
+                )
 
                 # Show time elapsed
                 console.print(

@@ -2,7 +2,6 @@
 import torch
 from torch import nn
 from rich import print
-from rich import pretty
 import pytorch_optimizer as TP_optim
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2 as v2_transforms
@@ -28,7 +27,7 @@ class_weighting_method = "linear"  # class weighting method
 dataLoader_num_workers = 8
 
 # Train Conf >>>
-train_batchsize = 32
+train_batchsize = 64
 eval_batchsize = 32
 train_gradient_accumulation = None
 dataLoader_num_workers = 8
@@ -135,7 +134,7 @@ def train(extra_args: dict):
     optimizer = TP_optim.GrokFastAdamW(
         optimizer_params,
         lr=0.01,
-        weight_decay=0.0032,
+        weight_decay=0.05,
     )
     optimizer = TP_optim.Lookahead(optimizer, k=5, alpha=0.5, pullback_momentum="none")
 

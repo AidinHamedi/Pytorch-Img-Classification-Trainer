@@ -50,9 +50,9 @@ def format_seconds(seconds: int) -> str:
 
     time_parts = []
     if hours > 0:
-        time_parts.append(f"{hours}h")
+        time_parts.append(f"{int(hours)}h")
     if minutes > 0:
-        time_parts.append(f"{minutes}m")
+        time_parts.append(f"{int(minutes)}m")
     if seconds > 0:
         time_parts.append(str(seconds) + "s")
 
