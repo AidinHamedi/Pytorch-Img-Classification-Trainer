@@ -121,29 +121,42 @@ def fit(
     log_debugging: bool = True,
     force_cpu: bool = False,
 ):
-    """_summary_
+    """
+    Trains a PyTorch model using the provided training and test data loaders.
 
     Args:
-        model (nn.Module): _description_
-        train_dataloader (DynamicArg): _description_
-        test_dataloader (DynamicArg): _description_
-        optimizer (torch.optim.Optimizer): _description_
-        loss_fn (torch.nn.Module): _description_
-        max_epochs (int, optional): _description_. Defaults to 512.
-        early_stopping_cnf (_type_, optional): _description_. Defaults to { "patience": 24, "monitor": "Cohen's Kappa", "mode": "max", "min_delta": 0.00001, }.
-        train_eval_portion (float, optional): _description_. Defaults to 0.1.
-        gradient_accumulation (bool, optional): _description_. Defaults to True.
-        gradient_accumulation_steps (DynamicArg, optional): _description_. Defaults to DynamicArg( default_value=4, mode="static" ).
-        mixed_precision (bool, optional): _description_. Defaults to True.
-        mixed_precision_dtype (torch.dtype, optional): _description_. Defaults to torch.float16.
-        opt_features (_type_, optional): _description_. Defaults to {"gradient centralization": True}.
-        experiment_name (str, optional): _description_. Defaults to "!auto".
-        model_export_path (str, optional): _description_. Defaults to "./models".
-        log_debugging (bool, optional): _description_. Defaults to True.
-        force_cpu (bool, optional): _description_. Defaults to False.
+        model (nn.Module): The PyTorch model to be trained.
+        train_dataloader (DynamicArg): Data loader for the training dataset. (Warning: This is a DynamicArg object)
+        test_dataloader (DynamicArg): Data loader for the test dataset. (Warning: This is a DynamicArg object)
+        optimizer (torch.optim.Optimizer): Optimizer for training the model.
+        loss_fn (torch.nn.Module): Loss function used for training.
+        max_epochs (int, optional): Maximum number of epochs to train. Defaults to 512.
+        early_stopping_cnf (dict, optional): Configuration for early stopping. Defaults to
+            {"patience": 24, "monitor": "Cohen's Kappa", "mode": "max", "min_delta": 0.00001}.
+        train_eval_portion (float, optional): Portion of training data to use for evaluation. Defaults to 0.1.
+        gradient_accumulation (bool, optional): Whether to use gradient accumulation. Defaults to True.
+        gradient_accumulation_steps (DynamicArg, optional): Number of steps for gradient accumulation. Defaults to DynamicArg(default_value=4, mode="static").
+            (Warning: This is a DynamicArg object)
+        mixed_precision (bool, optional): Whether to use mixed precision training. Defaults to True.
+        mixed_precision_dtype (torch.dtype, optional): Data type for mixed precision. Defaults to torch.float16.
+        opt_features (dict, optional): Optimization features to use. Defaults to {"gradient centralization": True}.
+            - "gradient centralization": bool
+            - "gradient normalization": bool
+            - "adaptive gradient clipping" [bool, float] (the second value is the clip)
+        experiment_name (str, optional): Name of the experiment. Defaults to "!auto".
+        model_export_path (str, optional): Path to save the trained model. Defaults to "./models".
+        log_debugging (bool, optional): Whether to log debugging information. Defaults to True.
+        force_cpu (bool, optional): Force training on CPU. Defaults to False.
 
     Returns:
-        _type_: _description_
+        dict: A dictionary containing the best trained model and training metrics history.
+            - "best_model" (nn.Module): The best model based on early stopping criteria.
+            - "metrics_hist" (dict): Training and validation metrics history.
+
+    Notes:
+        - The function uses Rich library for rich text and progress bar visualization.
+        - TensorBoard logging is used for metrics and debugging information.
+        - Early stopping is applied to prevent overfitting.
     """
     # Init rich
     console = Console()

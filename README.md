@@ -60,7 +60,7 @@ There are some utils with the training engine that you can use for like loading 
 - `./Training_Engine/Utils/Data/data_loader.py`: A utility for loading images from a directory or making a pytorch dataset for loading large datasets on the fly.
 - `./Training_Engine/Utils/Data/normalization.py`: A utility for normalizing images and getting class weighting.
 
-## Example Output
+## 📷 Example Output
 
 ![Img](doc\example.png)
 
