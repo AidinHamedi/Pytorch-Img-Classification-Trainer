@@ -26,10 +26,43 @@ uv sync
 
 ### Step 3: Check out the example
 
-There is an example are made that uses this system to run experiments (hyper parameters tuning), The experiments params are set in the `./expers.toml` file and the experiment runner is `./run_expers.py`. </br>
+There is an example already made that uses this system to run experiments (hyper parameters tuning), The experiments params are set in the `./expers.toml` file and the experiment runner is `./run_expers.py`. </br>
 The experiment runner will run the `train` function in `./train_exper.py` with the experiment params as the arg in that function you can set what the params do and etc... </br>
-In end you will see that the fit function of the `Training_Engine` is being called heres when the magic happens.
+In end you will see that the fit function of the `Training_Engine` is being called and here the magic happens 😊.
 
+## 📚 Documentation
+
+### Training Engine
+
+You can access the main `fit` function from `./Training_Engine/trainer.py` file.
+The `fit` function takes the following **required** arguments:
+
+- `model`: The model to be trained.
+- `train_dataloader`: The training data loader. (**DynamicArg**)
+- `test_dataloader`: The test data loader. (**DynamicArg**)
+- `optimizer`: The optimizer to be used for training.
+- `loss_fn`: The loss function to be used for training.
+
+And done all of the other args are optional and used setting mixed precision and etc... </br>
+I think you have noticed that the `train_dataloader` and `test_dataloader` are **DynamicArg** so what is a DynamicArg?
+
+### DynamicArg
+
+A DynamicArg is a special type of argument that allows you to pass a function as an generator and outputs a value based on the the environment. </br>
+Like for example you make the `train_dataloader` DynamicArg return a pytorch dataloader that adjusts the augmentation amount based on the epoch count.
+Its not that complicated just by looking at the code you will understand it. </br>
+You can import dynamic args from `./Training_Engine/Utils/Base/dynamic_args.py`.
+
+### Utils
+
+There are some utils with the training engine that you can use for like loading the images and etc...
+
+- `./Training_Engine/Utils/Data/data_loader.py`: A utility for loading images from a directory or making a pytorch dataset for loading large datasets on the fly.
+- `./Training_Engine/Utils/Data/normalization.py`: A utility for normalizing images and getting class weighting.
+
+## Example Output
+
+![Img](doc\example.png)
 
 ## 📝 License
 

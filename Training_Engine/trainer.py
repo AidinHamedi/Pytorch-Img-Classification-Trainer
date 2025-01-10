@@ -121,6 +121,30 @@ def fit(
     log_debugging: bool = True,
     force_cpu: bool = False,
 ):
+    """_summary_
+
+    Args:
+        model (nn.Module): _description_
+        train_dataloader (DynamicArg): _description_
+        test_dataloader (DynamicArg): _description_
+        optimizer (torch.optim.Optimizer): _description_
+        loss_fn (torch.nn.Module): _description_
+        max_epochs (int, optional): _description_. Defaults to 512.
+        early_stopping_cnf (_type_, optional): _description_. Defaults to { "patience": 24, "monitor": "Cohen's Kappa", "mode": "max", "min_delta": 0.00001, }.
+        train_eval_portion (float, optional): _description_. Defaults to 0.1.
+        gradient_accumulation (bool, optional): _description_. Defaults to True.
+        gradient_accumulation_steps (DynamicArg, optional): _description_. Defaults to DynamicArg( default_value=4, mode="static" ).
+        mixed_precision (bool, optional): _description_. Defaults to True.
+        mixed_precision_dtype (torch.dtype, optional): _description_. Defaults to torch.float16.
+        opt_features (_type_, optional): _description_. Defaults to {"gradient centralization": True}.
+        experiment_name (str, optional): _description_. Defaults to "!auto".
+        model_export_path (str, optional): _description_. Defaults to "./models".
+        log_debugging (bool, optional): _description_. Defaults to True.
+        force_cpu (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
     # Init rich
     console = Console()
 
