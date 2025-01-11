@@ -27,3 +27,8 @@ functorch = { git = "https://github.com/pytorch/functorch.git" }
 name = "pytorch-cu124"
 url = "https://download.pytorch.org/whl/cu124"
 explicit = true
+
+[dependency-groups]
+dev = [
+    "ruff-lsp>=0.0.60",
+]
