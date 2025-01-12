@@ -70,9 +70,11 @@ def calc_metrics(y, y_pred, loss_fn, averaging="macro"):
 
     # Calculating the metrics
     metrics_dict = {
-        "Loss": safe_metric_calculation(
-            loss_reduction, loss_fn, torch.tensor(y_pred), torch.tensor(y)
-        ).item(),
+        "Loss": float(
+            safe_metric_calculation(
+                loss_reduction, loss_fn, torch.tensor(y_pred), torch.tensor(y)
+            )
+        ),
         f"F1 Score ({averaging})": safe_metric_calculation(
             f1_score, y_labels, y_pred_labels, average=averaging
         ),
