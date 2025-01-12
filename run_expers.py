@@ -1,5 +1,4 @@
 # Libs >>>
-import os
 import tomllib
 from rich.console import Console
 
