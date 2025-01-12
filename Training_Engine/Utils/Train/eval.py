@@ -60,6 +60,11 @@ def calc_metrics(y, y_pred, loss_fn, averaging="macro"):
         except Exception:
             return epsilon
 
+    # Calculating the loss
+    metrics_dict = {
+        "Loss": float(safe_metric_calculation(loss_reduction, loss_fn, y_pred, y))
+    }
+
     # Convert tensors to numpy arrays (first convert to fp32 to make it support a dtype like bfloat16)
     y = y.type(torch.float32, non_blocking=True).numpy()
     y_pred = y_pred.type(torch.float32, non_blocking=True).numpy()
@@ -69,32 +74,35 @@ def calc_metrics(y, y_pred, loss_fn, averaging="macro"):
     y_labels = y.argmax(axis=1)
 
     # Calculating the metrics
-    metrics_dict = {
-        "Loss": float(
-            safe_metric_calculation(
-                loss_reduction, loss_fn, torch.tensor(y_pred), torch.tensor(y)
-            )
-        ),
-        f"F1 Score ({averaging})": safe_metric_calculation(
-            f1_score, y_labels, y_pred_labels, average=averaging
-        ),
-        f"Precision ({averaging})": safe_metric_calculation(
-            precision_score, y_labels, y_pred_labels, average=averaging, zero_division=0
-        ),
-        f"Recall ({averaging})": safe_metric_calculation(
-            recall_score, y_labels, y_pred_labels, average=averaging
-        ),
-        "AUROC": float(
-            safe_metric_calculation(roc_auc_score, y, y_pred, multi_class="ovr")
-        ),
-        "Accuracy": safe_metric_calculation(accuracy_score, y_labels, y_pred_labels),
-        "Cohen's Kappa": float(
-            safe_metric_calculation(cohen_kappa_score, y_labels, y_pred_labels)
-        ),
-        "Matthews Correlation Coefficient": float(
-            safe_metric_calculation(matthews_corrcoef, y_labels, y_pred_labels)
-        ),
-    }
+    metrics_dict.update(
+        {
+            f"F1 Score ({averaging})": safe_metric_calculation(
+                f1_score, y_labels, y_pred_labels, average=averaging
+            ),
+            f"Precision ({averaging})": safe_metric_calculation(
+                precision_score,
+                y_labels,
+                y_pred_labels,
+                average=averaging,
+                zero_division=0,
+            ),
+            f"Recall ({averaging})": safe_metric_calculation(
+                recall_score, y_labels, y_pred_labels, average=averaging
+            ),
+            "AUROC": float(
+                safe_metric_calculation(roc_auc_score, y, y_pred, multi_class="ovr")
+            ),
+            "Accuracy": safe_metric_calculation(
+                accuracy_score, y_labels, y_pred_labels
+            ),
+            "Cohen's Kappa": float(
+                safe_metric_calculation(cohen_kappa_score, y_labels, y_pred_labels)
+            ),
+            "Matthews Correlation Coefficient": float(
+                safe_metric_calculation(matthews_corrcoef, y_labels, y_pred_labels)
+            ),
+        }
+    )
 
     return metrics_dict
 
@@ -162,8 +170,8 @@ def eval(
     with torch.no_grad():
         for x, y in dataloader:
             y_pred = model(x.to(device, non_blocking=True))
-            all_y.append(y)
-            all_y_pred.append(y_pred.cpu())
+            all_y.append(y.detach().cpu())
+            all_y_pred.append(y_pred.detach().cpu())
             Progressbar.update(task, advance=1)
 
     # Clean up the progress bar if it was created here
