@@ -368,7 +368,7 @@ def fit(
                             apply_gradient_modifier(model, TP_optim.centralize_gradient)
 
                         # Adaptive Gradient clipping
-                        if train_mods["adaptive gradient clipping"]:
+                        if train_mods["adaptive gradient clipping"][0]:
                             adaptive_gradient_clipping(
                                 model, 1e-3, train_mods["adaptive gradient clipping"][1]
                             )
