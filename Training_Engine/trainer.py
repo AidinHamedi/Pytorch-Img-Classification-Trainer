@@ -100,6 +100,7 @@ def console_prefix(console, prefix=" | ", prefix_style: Style = None):
 
 # Main >>>
 
+
 def fit(
     model: nn.Module,
     train_dataloader: DynamicArg,
@@ -287,19 +288,6 @@ def fit(
                         epoch - 1,
                     )
 
-                # Log parameters
-                if log_debugging:
-                    for name, param in model.named_parameters():
-                        param_tag, param_type = (
-                            ">".join(name.replace(".", ">").split(">")[:-1]),
-                            name.replace(".", ">").split(">")[-1],
-                        )
-                        tbw_data.add_histogram(
-                            f"Train-Parameters|>>{param_tag}/{param_type}",
-                            param.data.cpu(),
-                            epoch - 1,
-                        )
-
                 # Prep
                 model.train()
                 loss_fn = loss_fn.to(device, non_blocking=True)
@@ -315,6 +303,9 @@ def fit(
                 batch_idx = 0
 
                 # Verbose
+                console.print(
+                    f"Train batch size: [cyan]{train_dataloader_ins.batch_size * (gradient_accumulation_steps_ins if gradient_accumulation else 1)}"
+                )
                 console.print(f"Train eval data len: [cyan]{train_eval_data_len}")
                 console.print(f"Learning rate: [cyan]{optimizer.param_groups[0]['lr']}")
 
@@ -418,6 +409,9 @@ def fit(
                 # Close task
                 progress_bar.stop_task(training_task)
 
+                # Move the loss function to the cpu
+                loss_fn = loss_fn.cpu()
+
                 # Val
                 train_eval = calc_metrics(
                     torch.cat([item["y"] for item in train_eval_data]),
@@ -480,6 +474,19 @@ def fit(
                     epoch,
                 )
 
+                # Log parameters
+                if log_debugging:
+                    for name, param in model.named_parameters():
+                        param_tag, param_type = (
+                            ">".join(name.replace(".", ">").split(">")[:-1]),
+                            name.replace(".", ">").split(">")[-1],
+                        )
+                        tbw_data.add_histogram(
+                            f"Train-Parameters|>>{param_tag}/{param_type}",
+                            param.data.cpu(),
+                            epoch,
+                        )
+
                 # Update some vars
                 train_total_fp += train_dataloader_len
 
@@ -516,7 +523,7 @@ def fit(
 
     # Load the best model + save it / delete the save path
     with suppress(Exception):
-        if epoch > 1:
+        if epoch > 2:
             early_stopping.load_best_model(model, raise_error=True)
             console.print("[underline]Successfully loaded the best model.")
             torch.save(model, os.path.join(model_save_path, "best_model.pth"))
@@ -537,7 +544,7 @@ def fit(
 
     # Delete short tensorboard logs
     with suppress(Exception):
-        if not epoch > 1:
+        if not epoch > 2:
             console.print(
                 "Tensorboard logs are too short, deleting them... (delete them manually if no confirmation is given)"
             )
