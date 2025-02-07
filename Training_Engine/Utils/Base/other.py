@@ -1,9 +1,3 @@
-# Libs >>>
-import signal
-import tkinter as tk
-from tkinter import messagebox
-
-
 # Main >>>
 def filter_by_types(data, allowed_types):
     """

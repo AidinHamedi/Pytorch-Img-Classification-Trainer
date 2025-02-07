@@ -3,7 +3,11 @@ import gc
 import os
 import shutil
 import time
-from contextlib import contextmanager, suppress
+from contextlib import (
+    contextmanager,
+    suppress,
+    nullcontext,
+)
 
 import numpy as np
 import pytorch_optimizer as TP_optim
@@ -29,6 +33,7 @@ from rich.segment import Segment
 from rich.style import Style
 from rich.table import Table
 from torch import nn
+from torch.compiler import cudagraph_mark_step_begin
 from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
 
@@ -52,7 +57,7 @@ from .Utils.Train.eval import (
 from .Utils.Train.eval import (
     eval as eval_model,
 )
-from .Utils.Train.grad_mod import apply_gradient_modifier
+from .Utils.Train.grad_mod import apply_gradient_modifiers
 
 # Conf >>>
 epoch_verbose_prefix = " | "
@@ -99,8 +104,6 @@ def console_prefix(console, prefix=" | ", prefix_style: Style = None):
 
 
 # Main >>>
-
-
 def fit(
     model: nn.Module,
     train_dataloader: DynamicArg,
@@ -122,8 +125,16 @@ def fit(
     mixed_precision: bool = True,
     mixed_precision_dtype: torch.dtype = torch.float16,
     opt_features: dict = {"gradient centralization": True},
+    grad_mod_exclude_layer_types: list = None,
     experiment_name: str = "!auto",
-    model_export_path: str = "./models",
+    model_export_path: str = "./Models",
+    model_trace_input: torch.Tensor = None,
+    cuda_compile: bool = True,
+    cuda_compile_config: dict = {
+        "dynamic": True,
+        "fullgraph": True,
+        "backend": "cudagraphs",
+    },
     log_debugging: bool = True,
     force_cpu: bool = False,
 ):
@@ -149,8 +160,12 @@ def fit(
             - "gradient centralization": bool
             - "gradient normalization": bool
             - "adaptive gradient clipping" [bool, float] (the second value is the clip)
+        grad_mod_exclude_layer_types (list, optional): List of layer types to exclude from gradient modification. Defaults to None.
         experiment_name (str, optional): Name of the experiment. Defaults to "!auto".
-        model_export_path (str, optional): Path to save the trained model. Defaults to "./models".
+        model_export_path (str, optional): Path to save the trained model. Defaults to "./Models".
+        model_trace_input (torch.Tensor, optional): Input tensor for tracing the model. Defaults to None.
+        cuda_compile (bool, optional): Whether to use CUDA compilation. Defaults to True.
+        cuda_compile_config (dict, optional): Configuration for CUDA compilation. Defaults to {"dynamic": True, "fullgraph": False, "backend": "cudagraphs"}.
         log_debugging (bool, optional): Whether to log debugging information. Defaults to True.
         force_cpu (bool, optional): Force training on CPU. Defaults to False.
 
@@ -190,12 +205,42 @@ def fit(
     model = model.to(device, non_blocking=True)
 
     # Make the tensorboard writer
-    tb_log_dir = f"./logs/runs/{experiment_name}"
+    tb_log_dir = f"./Logs/runs/{experiment_name}"
     console.print(f"Tensorboard log dir: [green]{tb_log_dir}")
     if log_debugging:
         tbw_data = SummaryWriter(log_dir=f"{tb_log_dir}/Data", max_queue=25)
     tbw_val = SummaryWriter(log_dir=f"{tb_log_dir}/Val", flush_secs=45)
     tbw_train = SummaryWriter(log_dir=f"{tb_log_dir}/Train", flush_secs=45)
+
+    # Save the model in tensorboard (Must be before model compile)
+    if log_debugging:
+        if model_trace_input is None:
+            raise ValueError(
+                "model_trace_input must be provided for tensorboard model logging"
+            )
+        tbw_data.add_graph(model, model_trace_input.to(device))
+
+    # Enable onednn fusion
+    if device_str == "cuda":
+        torch.jit.enable_onednn_fusion(True)
+        torch.backends.cudnn.benchmark = True
+        # Compile model
+        if cuda_compile:
+            console.print(f"Compiling model with: [green]{cuda_compile_config}")
+            torch.set_float32_matmul_precision("high")
+            torch._dynamo.config.cache_size_limit = 32
+            model = torch.compile(model, **cuda_compile_config)
+            console.print(
+                "[red]Warning[reset]: The first time you run this model, it will be slow! (Using torch compile)"
+            )
+            if log_debugging:
+                console.print(
+                    "[red]Warning[reset]: When using torch compile some log_debugging features may not work properly!"
+                )
+    elif cuda_compile:
+        console.print(
+            "[red]Warning[reset]: cuda_compile is only available for cuda devices!"
+        )
 
     # Make the model save path
     model_save_path = f"{model_export_path}/{experiment_name}"
@@ -203,16 +248,21 @@ def fit(
     console.print(f"Model save path: [green]{model_save_path}")
 
     # Train mods
-    train_mods = {
-        "gradient centralization": opt_features.get("gradient centralization", False),
-        "gradient normalization": opt_features.get("gradient normalization", False),
-        "adaptive gradient clipping": opt_features.get(
-            "adaptive gradient clipping", [False, 0.01]
-        ),
-    }
+    train_mods = []
     console.print("[yellow]Train mods:")
-    for key in train_mods:
-        console.print(f" - {key}: {train_mods[key]}")
+    for key, value in {
+        "gradient centralization": [TP_optim.centralize_gradient, False],
+        "gradient normalization": [TP_optim.normalize_gradient, False],
+        "adaptive gradient clipping": [TP_optim.agc, True],
+    }.items():
+        if key in opt_features:
+            if isinstance(opt_features[key], (list, tuple)) and opt_features[key][0]:
+                train_mods.append([*value, *opt_features[key][1:]])
+            elif opt_features[key]:
+                train_mods.append([*value])
+            console.print(f" - {key}: {opt_features[key]}")
+        else:
+            console.print(f" - [gray]{key}[reset]: [yellow]Not given")
 
     # Make the early stopping
     early_stopping = EarlyStopping(
@@ -336,11 +386,10 @@ def fit(
                         enabled=mixed_precision,
                         dtype=mixed_precision_dtype,
                     ):
+                        if cuda_compile and device_str == "cuda":
+                            cudagraph_mark_step_begin()
                         y_pred = model(x.to(device, non_blocking=True))
                         loss = loss_fn(y_pred, y.to(device, non_blocking=True))
-
-                    # Store the loss
-                    train_loss_data.append(loss.item())
 
                     # Normalize the loss if using gradient accumulation
                     if gradient_accumulation:
@@ -352,30 +401,34 @@ def fit(
                     else:
                         loss.backward()
 
+                    # Store the loss
+                    train_loss_data.append(
+                        loss.item()
+                        * (
+                            gradient_accumulation_steps_ins
+                            if gradient_accumulation
+                            else 1
+                        )
+                    )
+
                     # Model param update (Train step)
                     if not gradient_accumulation or (
                         (fp_idx + 1) % gradient_accumulation_steps_ins == 0
                     ):
                         # Update the batch_idx
                         batch_idx += 1
-
+                        
                         # Gradient unscale (For supporting grad modifiers like gradient clipping)
-                        if mixed_precision:
+                        if mixed_precision or len(train_mods) > 0:
                             mpt_scaler.unscale_(optimizer)
 
-                        # Centralize gradients
-                        if train_mods["gradient centralization"]:
-                            apply_gradient_modifier(model, TP_optim.centralize_gradient)
-
-                        # Adaptive Gradient clipping
-                        if train_mods["adaptive gradient clipping"][0]:
-                            adaptive_gradient_clipping(
-                                model, 1e-3, train_mods["adaptive gradient clipping"][1]
+                        # Apply gradient modifiers
+                        if len(train_mods) > 0:
+                            apply_gradient_modifiers(
+                                model,
+                                train_mods,
+                                grad_mod_exclude_layer_types,
                             )
-
-                        # Gradient normalization
-                        if train_mods["gradient normalization"]:
-                            apply_gradient_modifier(model, TP_optim.normalize_gradient)
 
                         # Optimizer step
                         if mixed_precision:
@@ -385,13 +438,17 @@ def fit(
                             optimizer.step()
 
                         # Zero grad
-                        for param in model.parameters():
-                            param.grad = None
+                        optimizer.zero_grad()
 
                         # Train Eval Data
                         if batch_idx >= (train_total_batches - train_eval_data_len):
                             train_eval_data.append(
-                                {"y_pred": y_pred.detach().cpu(), "y": y.detach().cpu()}
+                                {
+                                    "y_pred": y_pred.detach().to(
+                                        "cpu", non_blocking=True
+                                    ),
+                                    "y": y.to("cpu", non_blocking=True),
+                                }
                             )
 
                             # Progress bar update
@@ -469,7 +526,7 @@ def fit(
                     "Metrics/Train stability",
                     calculate_stability(
                         train_loss_data,
-                        window_size=train_dataloader_len // 2,
+                        window_size=round(train_dataloader_len / 2.5),
                     ),
                     epoch,
                 )
@@ -481,11 +538,22 @@ def fit(
                             ">".join(name.replace(".", ">").split(">")[:-1]),
                             name.replace(".", ">").split(">")[-1],
                         )
-                        tbw_data.add_histogram(
-                            f"Train-Parameters|>>{param_tag}/{param_type}",
-                            param.data.cpu(),
-                            epoch,
-                        )
+                        # Add a check before adding histogram
+                        if param.data.numel() > 0 and not torch.all(
+                            torch.isnan(param.data)
+                        ):
+                            tbw_data.add_histogram(
+                                f"Train-Parameters|>>{param_tag}/{param_type}",
+                                param.data.cpu(),
+                                epoch,
+                            )
+
+                # Log train time
+                tbw_data.add_scalar(
+                    "Other/Epoch_time (minutes)",
+                    (time.time() - epoch_start_time) / 60,
+                    epoch,
+                )
 
                 # Update some vars
                 train_total_fp += train_dataloader_len
