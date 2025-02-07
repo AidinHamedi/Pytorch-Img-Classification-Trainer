@@ -165,7 +165,7 @@ def fit(
         model_export_path (str, optional): Path to save the trained model. Defaults to "./Models".
         model_trace_input (torch.Tensor, optional): Input tensor for tracing the model. Defaults to None.
         cuda_compile (bool, optional): Whether to use CUDA compilation. Defaults to True.
-        cuda_compile_config (dict, optional): Configuration for CUDA compilation. Defaults to {"dynamic": True, "fullgraph": False, "backend": "cudagraphs"}.
+        cuda_compile_config (dict, optional): Configuration for CUDA compilation. Defaults to {"dynamic": True, "fullgraph": True, "backend": "cudagraphs"}.
         log_debugging (bool, optional): Whether to log debugging information. Defaults to True.
         force_cpu (bool, optional): Force training on CPU. Defaults to False.
 

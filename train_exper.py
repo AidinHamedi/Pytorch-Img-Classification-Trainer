@@ -28,7 +28,7 @@ dataLoader_num_workers = 8
 
 # Train Conf >>>
 train_batchsize = 64
-eval_batchsize = 32
+eval_batchsize = 64
 train_gradient_accumulation = None
 dataLoader_num_workers = 8
 
@@ -160,8 +160,9 @@ def train(extra_args: dict):
             "min_delta": 0.00001,
         },
         opt_features={
-            "gradient normalization": extra_args["gradient_normalization"],
-            "gradient centralization": extra_args["gradient_centralization"],
-            "adaptive gradient clipping": [extra_args["agc"], 0.01],
+            "gradient centralization": True,
+            "adaptive gradient clipping": [True, 1e-3, 0.01],
         },
+        grad_mod_exclude_layer_types=["ResidualCombiner"],
+        model_trace_input=torch.randn(1, 3, 224, 224),
     )
