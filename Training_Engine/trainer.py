@@ -3,10 +3,10 @@ import gc
 import os
 import shutil
 import time
+import shortuuid
 from contextlib import (
     contextmanager,
     suppress,
-    nullcontext,
 )
 
 import numpy as np
@@ -48,7 +48,6 @@ from .Utils.Data.debug import (
 from .Utils.Data.debug import (
     retrieve_samples as dl_retrieve_samples,
 )
-from .Utils.Train.adaptive_gradient_clipping import adaptive_gradient_clipping
 from .Utils.Train.early_stopping import EarlyStopping
 from .Utils.Train.eval import (
     calc_metrics,
@@ -124,6 +123,11 @@ def fit(
     ),
     mixed_precision: bool = True,
     mixed_precision_dtype: torch.dtype = torch.float16,
+    lr_scheduler: dict = {
+        "scheduler": None,
+        "enable": False,
+        "batch_mode": False,
+    },
     opt_features: dict = {"gradient centralization": True},
     grad_mod_exclude_layer_types: list = None,
     experiment_name: str = "!auto",
@@ -131,7 +135,7 @@ def fit(
     model_trace_input: torch.Tensor = None,
     cuda_compile: bool = True,
     cuda_compile_config: dict = {
-        "dynamic": True,
+        "dynamic": False,
         "fullgraph": True,
         "backend": "cudagraphs",
     },
@@ -156,10 +160,15 @@ def fit(
             (Warning: This is a DynamicArg object)
         mixed_precision (bool, optional): Whether to use mixed precision training. Defaults to True.
         mixed_precision_dtype (torch.dtype, optional): Data type for mixed precision. Defaults to torch.float16.
+        lr_scheduler (dict, optional): Configuration for learning rate scheduler. Defaults to
+            {"scheduler": None, "enable": False, "metrics": None, "batch_mode": False}.
+            - "scheduler" (torch.optim.lr_scheduler): The learning rate scheduler.
+            - "enable" (bool): Whether to enable the learning rate scheduler.
+            - "batch_mode" (bool): Whether to use batch mode for the learning rate scheduler.
         opt_features (dict, optional): Optimization features to use. Defaults to {"gradient centralization": True}.
             - "gradient centralization": bool
             - "gradient normalization": bool
-            - "adaptive gradient clipping" [bool, float] (the second value is the clip)
+            - "adaptive gradient clipping" [bool, float, float] (eps, alpha)
         grad_mod_exclude_layer_types (list, optional): List of layer types to exclude from gradient modification. Defaults to None.
         experiment_name (str, optional): Name of the experiment. Defaults to "!auto".
         model_export_path (str, optional): Path to save the trained model. Defaults to "./Models".
@@ -183,13 +192,18 @@ def fit(
     console = Console()
 
     # Make experiment name
-    if experiment_name == "!auto":  # TODO Check for duplicates
-        experiment_name = f"{time.strftime('%Y-%m-%d_%H-%M-%S')}"
+    if experiment_name == "!auto":
+        experiment_name = f"{time.strftime('%Y-%m-%d %H-%M-%S')}"
+    else:
+        experiment_name = f"{shortuuid.ShortUUID().random(length=8)}~{experiment_name}"  # Avoid duplicates
 
     # Start msg
     console.print(
         f"[bold green]Initializing... [default](Experiment name: [yellow]{experiment_name}[default])"
     )
+
+    # Make var to hold the start time
+    start_time = time.time()
 
     # Get device
     if not mixed_precision:
@@ -263,6 +277,11 @@ def fit(
             console.print(f" - {key}: {opt_features[key]}")
         else:
             console.print(f" - [gray]{key}[reset]: [yellow]Not given")
+
+    # Make a function to handel the lr scheduler
+    def _lr_scheduler_step():
+        if lr_scheduler["enable"]:
+            lr_scheduler["scheduler"].step()
 
     # Make the early stopping
     early_stopping = EarlyStopping(
@@ -365,7 +384,7 @@ def fit(
                     SpinnerColumn(finished_text="[yellow]⠿"),
                     TextColumn("[progress.description]{task.description}"),
                     BarColumn(),
-                    TaskProgressColumn(),
+                    TaskProgressColumn(show_speed=True),
                     MofNCompleteColumn(),
                     TimeRemainingColumn(),
                     TimeElapsedColumn(),
@@ -386,7 +405,11 @@ def fit(
                         enabled=mixed_precision,
                         dtype=mixed_precision_dtype,
                     ):
-                        if cuda_compile and device_str == "cuda":
+                        if (
+                            cuda_compile
+                            and device_str == "cuda"
+                            and cuda_compile_config.get("backend", "") == "cudagraphs"
+                        ):
                             cudagraph_mark_step_begin()
                         y_pred = model(x.to(device, non_blocking=True))
                         loss = loss_fn(y_pred, y.to(device, non_blocking=True))
@@ -417,7 +440,7 @@ def fit(
                     ):
                         # Update the batch_idx
                         batch_idx += 1
-                        
+
                         # Gradient unscale (For supporting grad modifiers like gradient clipping)
                         if mixed_precision or len(train_mods) > 0:
                             mpt_scaler.unscale_(optimizer)
@@ -439,6 +462,10 @@ def fit(
 
                         # Zero grad
                         optimizer.zero_grad()
+
+                        # LR Scheduler step
+                        if lr_scheduler.get("batch_mode", False):
+                            _lr_scheduler_step()
 
                         # Train Eval Data
                         if batch_idx >= (train_total_batches - train_eval_data_len):
@@ -468,6 +495,10 @@ def fit(
 
                 # Move the loss function to the cpu
                 loss_fn = loss_fn.cpu()
+
+                # LR Scheduler step
+                if not lr_scheduler.get("batch_mode", False):
+                    _lr_scheduler_step()
 
                 # Val
                 train_eval = calc_metrics(
@@ -522,6 +553,12 @@ def fit(
                         train_total_fp + i,
                     )
                 tbw_data.add_histogram("Loss/Train", np.asarray(train_loss_data), epoch)
+                if lr_scheduler.get("enable", False):
+                    tbw_train.add_scalar(
+                        "Other/Train-LR",
+                        lr_scheduler["scheduler"].get_last_lr()[0],
+                        epoch,
+                    )
                 tbw_train.add_scalar(
                     "Metrics/Train stability",
                     calculate_stability(
@@ -568,7 +605,7 @@ def fit(
                     epoch, test_eval[early_stopping_cnf["monitor"]], model
                 )
                 if early_stopping.should_stop:
-                    console.print("Stopping the training early...")
+                    print("Stopping the training early...")
                     # End
                     break
 
@@ -592,7 +629,7 @@ def fit(
     # Load the best model + save it / delete the save path
     with suppress(Exception):
         if epoch > 2:
-            early_stopping.load_best_model(model, raise_error=True)
+            early_stopping.load_best_model(model, raise_error=True, verbose=False)
             console.print("[underline]Successfully loaded the best model.")
             torch.save(model, os.path.join(model_save_path, "best_model.pth"))
             console.print("[underline]Successfully saved the best model.")
@@ -618,6 +655,36 @@ def fit(
             )
             shutil.rmtree(tb_log_dir)
             console.print("[underline]Successfully deleted the short tensorboard logs.")
+
+    # Print the final metrics
+    if epoch > 2:
+        console.print(
+            f"[yellow]Best model from epoch [green]{early_stopping.best_epoch}[yellow] metrics: "
+        )
+        with console_prefix(console, prefix="   "):
+            result_table = Table(box=box.ROUNDED, highlight=True)
+            result_table.add_column("Set", justify="center", style="bold green")
+            for metric in metrics_hist["Val"][early_stopping.best_epoch - 1]:
+                result_table.add_column(metric, justify="center")
+            for metric_set in [
+                [metrics_hist["Train"][early_stopping.best_epoch - 1], "Train"],
+                [metrics_hist["Val"][early_stopping.best_epoch - 1], "Val"],
+            ]:
+                result_table.add_row(
+                    metric_set[1],
+                    *[
+                        f"{metric_set[0][metric]:.5f}"
+                        if isinstance(metric_set[0][metric], float)
+                        else metric_set[0][metric]
+                        for metric in test_eval
+                    ],
+                )
+            console.print(result_table)
+
+    # Print the final time
+    console.print(
+        f"Training completed in: [cyan]{format_seconds(time.time() - start_time)}"
+    )
 
     # return model, metrics_hist
     return {

@@ -69,19 +69,25 @@ class EarlyStopping:
             else new <= old - self.min_delta
         )
 
-    def update(self, epoch: int, monitor: float, model: torch.nn.Module):
+    def update(
+        self, epoch: int, monitor: float, model: torch.nn.Module, verbose: bool = None
+    ):
         """Update the early stopping state based on the current epoch's monitored metric value.
 
         Args:
             epoch (int): The current epoch number.
             monitor (float): The current value of the monitored metric.
             model (torch.nn.Module): The model to be saved if it has the best monitored metric value.
+            verbose (bool, optional): Whether to print messages about early stopping events. Defaults to None (uses the class's verbose attribute).
         """
+        if verbose is None:
+            verbose = self.verbose
+
         if self._improve_function(monitor, self.best_monitor):
             self.best_epoch = epoch
             self.best_monitor = monitor
             self.should_stop = False
-            if self.verbose:
+            if verbose:
                 print(
                     f"{self.print_indicator} [green]New best {self.monitor_name}[reset] ({self.mode}): {self.best_monitor:.4f} at epoch {self.best_epoch}"
                 )
@@ -91,28 +97,34 @@ class EarlyStopping:
             )
         elif epoch - self.best_epoch >= self.patience:
             self.should_stop = True
-            if self.verbose:
+            if verbose:
                 print(
                     f"{self.print_indicator} [red]Triggered! [reset]Best results: Epoch {self.best_epoch} with {self.monitor_name} of {self.best_monitor:.4f}"
                 )
 
-    def load_best_model(self, model: torch.nn.Module, raise_error: bool = False):
+    def load_best_model(
+        self, model: torch.nn.Module, raise_error: bool = False, verbose: bool = None
+    ):
         """Load the best model from the cache directory.
 
         Args:
             model (torch.nn.Module): The model to load the best state into.
             raise_error (bool, optional): Whether to raise an error if the best model is not found. Defaults to False.
+            verbose (bool, optional): Whether to print a message about loading the best model. Defaults to None (uses the instance's verbose value).
         """
+        if verbose is None:
+            verbose = self.verbose
+
         if os.path.exists(os.path.join(self.cache_dir, self.model_save_name)):
             model.load_state_dict(
                 torch.load(os.path.join(self.cache_dir, self.model_save_name))
             )
-            if self.verbose:
+            if verbose:
                 print(
                     f"{self.print_indicator} [green]Loaded the best model from {self.cache_dir}"
                 )
         else:
-            if self.verbose:
+            if verbose:
                 print(f"{self.print_indicator} [red]No model found in {self.cache_dir}")
             if raise_error:
                 raise FileNotFoundError(

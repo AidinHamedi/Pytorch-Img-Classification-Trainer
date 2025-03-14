@@ -6,6 +6,8 @@ import random
 import numpy as np
 from PIL import Image
 from rich import print
+from torch.utils.data import Dataset
+from typing import Tuple
 from rich.progress import Progress
 from rich.progress import (
     BarColumn,
@@ -454,3 +456,75 @@ def make_data_pairs(
         "num_classes": num_classes,
         "labels": labels,
     }
+
+
+class TensorDataset_rtDTC(Dataset[Tuple[torch.Tensor, ...]]):
+    """Runtime Data Type Conversion (rtDTC) dataset for efficient data type conversion.
+
+    Args:
+        image_tensors (Tensor): A tensor containing the image data.
+        label_tensors (Tensor): A tensor containing the labels corresponding to the images.
+        dtype (torch.dtype, optional): The desired data type for tensor (Img tensor). Defaults to torch.float32.
+    """
+
+    def __init__(
+        self,
+        image_tensors: torch.Tensor,
+        label_tensors: torch.Tensor,
+        dtype=torch.float32,
+    ) -> None:
+        assert image_tensors.size(0) == label_tensors.size(0), (
+            "Size mismatch between image and label tensors"
+        )
+        self.image_tensors = image_tensors
+        self.label_tensors = label_tensors
+        self.dtype = dtype
+
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, ...]:
+        return (
+            self.image_tensors[index].type(dtype=self.dtype, non_blocking=True),
+            self.label_tensors[index],
+        )
+
+    def __len__(self) -> int:
+        return self.label_tensors.size(0)
+
+
+class TensorDataset_rtIDT(Dataset[Tuple[torch.Tensor, ...]]):
+    """Runtime Image Data Transformation (rtIDT) dataset for efficient image data processing.
+
+    This dataset applies transformations only to image tensors, changes their dtype,
+    and saves memory by augmenting images on-the-fly using torchvision.transforms.v2.
+
+    Args:
+        image_tensors (Tensor): A tensor containing the image data.
+        label_tensors (Tensor): A tensor containing the labels corresponding to the images.
+        transformer: A torchvision.transforms.v2.Compose object.
+        dtype (torch.dtype, optional): The desired data type for tensor (Img tensor). Defaults to torch.float32.
+    """
+
+    def __init__(
+        self,
+        image_tensors: torch.Tensor,
+        label_tensors: torch.Tensor,
+        transformer,
+        dtype=torch.float32,
+    ) -> None:
+        assert image_tensors.size(0) == label_tensors.size(0), (
+            "Size mismatch between image and label tensors"
+        )
+        self.image_tensors = image_tensors
+        self.label_tensors = label_tensors
+        self.transformer = transformer
+        self.dtype = dtype
+
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, ...]:
+        return (
+            self.transformer(self.image_tensors[index]).type(
+                self.dtype, non_blocking=True
+            ),
+            self.label_tensors[index],
+        )
+
+    def __len__(self) -> int:
+        return self.label_tensors.size(0)

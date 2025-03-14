@@ -1,11 +1,12 @@
 # Libs >>>
 import torch
-from torch.cuda import Stream 
+from torch.cuda import Stream
+
 
 # Main >>>
 def apply_gradient_modifiers(
     model: torch.nn.Module,
-    modifiers_fn: list, 
+    modifiers_fn: list,
     exclude_layer_types: list = None,
     param_to_stream_ratio: int = 96,
 ) -> None:
@@ -43,7 +44,7 @@ def apply_gradient_modifiers(
         """Helper function to process a single gradient"""
         if grad.norm() == 0:
             return None
-            
+
         modified_grad = grad
         for modifier, param_first, *args in modifiers_fn:
             try:
@@ -54,7 +55,7 @@ def apply_gradient_modifiers(
                 )
                 if modified is not None:
                     modified_grad = modified
-            except:
+            except Exception:
                 continue
         return modified_grad
 
@@ -68,29 +69,39 @@ def apply_gradient_modifiers(
 
         if is_cuda:
             # Calculate number of streams based on param_to_stream_ratio
-            num_streams = (len(param_info) + param_to_stream_ratio - 1) // param_to_stream_ratio
+            num_streams = (
+                len(param_info) + param_to_stream_ratio - 1
+            ) // param_to_stream_ratio
             streams = [Stream() for _ in range(num_streams)]
-            
+
             for i, (_, param, module_name) in enumerate(param_info):
-                if exclude_layer_types and module_types.get(module_name) in exclude_layer_types:
+                if (
+                    exclude_layer_types
+                    and module_types.get(module_name) in exclude_layer_types
+                ):
                     continue
-                
+
                 # Assign parameters to streams in a round-robin fashion
                 stream_idx = i // param_to_stream_ratio
                 with torch.cuda.stream(streams[stream_idx]):
-                    grad = param.grad.detach().clone(memory_format=torch.preserve_format)
+                    grad = param.grad.detach().clone(
+                        memory_format=torch.preserve_format
+                    )
                     modified_grad = process_gradient(param, grad)
                     if modified_grad is not None:
                         param.grad.copy_(modified_grad, non_blocking=True)
-                        
+
             torch.cuda.synchronize()
-            
+
         else:
             # Sequential processing for CPU
             for _, param, module_name in param_info:
-                if exclude_layer_types and module_types.get(module_name) in exclude_layer_types:
+                if (
+                    exclude_layer_types
+                    and module_types.get(module_name) in exclude_layer_types
+                ):
                     continue
-                    
+
                 grad = param.grad.detach().clone(memory_format=torch.preserve_format)
                 modified_grad = process_gradient(param, grad)
                 if modified_grad is not None:
